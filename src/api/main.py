@@ -119,6 +119,7 @@ def validate_tool_consistency():
         raise
 
 
+# 启动时验证配置一致性
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
