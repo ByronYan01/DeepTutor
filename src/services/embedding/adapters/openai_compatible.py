@@ -45,7 +45,8 @@ class OpenAICompatibleEmbeddingAdapter(BaseEmbeddingAdapter):
 
         logger.debug(f"Sending embedding request to {url} with {len(request.texts)} texts")
 
-        async with httpx.AsyncClient(timeout=self.request_timeout) as client:
+        # 由于外网代理导致无法访问局域网代理，因此需要禁用代理
+        async with httpx.AsyncClient(timeout=self.request_timeout, proxy=None) as client:
             response = await client.post(url, json=payload, headers=headers)
 
             if response.status_code >= 400:

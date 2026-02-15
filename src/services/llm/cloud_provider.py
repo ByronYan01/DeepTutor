@@ -13,6 +13,14 @@ from typing import AsyncGenerator, Dict, List, Optional
 
 import aiohttp
 
+# 禁用代理
+def _get_aiohttp_ssl_context():
+    """Get SSL context for aiohttp. Disables verification if DISABLE_SSL_VERIFY is set."""
+    if os.getenv("DISABLE_SSL_VERIFY", "").lower() in ("true", "1", "yes"):
+        return False  # aiohttp accepts False to skip SSL verification
+    return None  # use default SSL verification
+
+
 # Get loggers for suppression during fallback scenarios
 # (lightrag logs errors internally before raising exceptions)
 _lightrag_logger = logging.getLogger("lightrag")
@@ -232,8 +240,8 @@ async def _openai_complete(
             data["response_format"] = kwargs["response_format"]
 
         timeout = aiohttp.ClientTimeout(total=120)
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.post(url, headers=headers, json=data) as resp:
+        async with aiohttp.ClientSession(timeout=timeout, trust_env=False) as session:
+            async with session.post(url, headers=headers, json=data, ssl=_get_aiohttp_ssl_context()) as resp:
                 if resp.status == 200:
                     result = await resp.json()
                     if "choices" in result and result["choices"]:
@@ -310,8 +318,8 @@ async def _openai_stream(
         data["response_format"] = kwargs["response_format"]
 
     timeout = aiohttp.ClientTimeout(total=300)
-    async with aiohttp.ClientSession(timeout=timeout) as session:
-        async with session.post(url, headers=headers, json=data) as resp:
+    async with aiohttp.ClientSession(timeout=timeout, trust_env=False) as session:
+        async with session.post(url, headers=headers, json=data, ssl=_get_aiohttp_ssl_context()) as resp:
             if resp.status != 200:
                 error_text = await resp.text()
                 raise LLMAPIError(
@@ -402,8 +410,8 @@ async def _anthropic_complete(
     }
 
     timeout = aiohttp.ClientTimeout(total=120)
-    async with aiohttp.ClientSession(timeout=timeout) as session:
-        async with session.post(url, headers=headers, json=data) as response:
+    async with aiohttp.ClientSession(timeout=timeout, trust_env=False) as session:
+        async with session.post(url, headers=headers, json=data, ssl=_get_aiohttp_ssl_context()) as response:
             if response.status != 200:
                 error_text = await response.text()
                 raise LLMAPIError(
@@ -461,8 +469,8 @@ async def _anthropic_stream(
     }
 
     timeout = aiohttp.ClientTimeout(total=300)
-    async with aiohttp.ClientSession(timeout=timeout) as session:
-        async with session.post(url, headers=headers, json=data) as response:
+    async with aiohttp.ClientSession(timeout=timeout, trust_env=False) as session:
+        async with session.post(url, headers=headers, json=data, ssl=_get_aiohttp_ssl_context()) as response:
             if response.status != 200:
                 error_text = await response.text()
                 raise LLMAPIError(
@@ -517,7 +525,7 @@ async def fetch_models(
     headers.pop("Content-Type", None)
 
     timeout = aiohttp.ClientTimeout(total=30)
-    async with aiohttp.ClientSession(timeout=timeout) as session:
+    async with aiohttp.ClientSession(timeout=timeout, trust_env=False) as session:
         try:
             url = f"{base_url}/models"
             async with session.get(url, headers=headers) as resp:

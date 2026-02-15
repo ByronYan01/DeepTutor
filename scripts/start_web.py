@@ -153,6 +153,46 @@ def terminate_process_tree(process, name="Process", timeout=5):
         print_flush(f"   ⚠️ Error stopping {name}: {e}")
 
 
+def kill_port_processes(port, name="Process"):
+    """Kill any processes occupying the given port.
+    
+    This is needed because VS Code debug restart sends SIGKILL to the main process,
+    which doesn't give the finally block a chance to clean up child processes.
+    """
+    try:
+        import subprocess as _sp
+        if os.name == "nt":
+            # Windows: use netstat + taskkill
+            result = _sp.run(
+                ["netstat", "-ano"], capture_output=True, text=True, check=False
+            )
+            for line in result.stdout.splitlines():
+                if f":{port}" in line and "LISTENING" in line:
+                    parts = line.strip().split()
+                    pid = parts[-1]
+                    if pid.isdigit() and int(pid) != os.getpid():
+                        print_flush(f"⚠️  Killing old {name} process on port {port} (PID: {pid})")
+                        _sp.run(["taskkill", "/F", "/T", "/PID", pid], check=False, capture_output=True)
+        else:
+            # macOS/Linux: use lsof
+            result = _sp.run(
+                ["lsof", "-ti", f":{port}"], capture_output=True, text=True, check=False
+            )
+            if result.stdout.strip():
+                pids = result.stdout.strip().split("\n")
+                for pid in pids:
+                    pid = pid.strip()
+                    if pid.isdigit() and int(pid) != os.getpid():
+                        print_flush(f"⚠️  Killing old {name} process on port {port} (PID: {pid})")
+                        try:
+                            os.kill(int(pid), signal.SIGKILL)
+                        except ProcessLookupError:
+                            pass
+                time.sleep(0.5)
+    except Exception as e:
+        print_flush(f"⚠️  Failed to clean port {port}: {e}")
+
+
 def start_backend():
     print_flush(f"🚀 Starting FastAPI Backend using {sys.executable}...")
     base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -436,6 +476,14 @@ if __name__ == "__main__":
     frontend = None
 
     try:
+        # Clean up any orphaned processes from previous debug sessions
+        from src.services.setup import get_ports as _get_ports
+        _bp, _fp = _get_ports(
+            Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        )
+        kill_port_processes(_bp, name="Backend")
+        kill_port_processes(_fp, name="Frontend")
+
         backend = start_backend()
 
         # Get backend port for health check

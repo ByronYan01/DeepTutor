@@ -9,6 +9,10 @@ This agent provides:
 - Streaming response generation
 
 Uses the unified LLM factory from BaseAgent for both cloud and local LLM support.
+
+核心就是 retrieve_context 采集信息 + build_messages 组装 prompt + generate/generate_stream 调 LLM。
+其余的辅助方法（count_tokens、truncate_history、format_history_for_prompt）都是为多轮对话服务的。
+
 """
 
 from pathlib import Path
@@ -186,6 +190,7 @@ class ChatAgent(BaseAgent):
         if enable_rag and kb_name:
             try:
                 self.logger.info(f"RAG search: {message[:50]}...")
+                # 默认混合检索：向量 + 知识图谱
                 rag_result = await rag_search(
                     query=message,
                     kb_name=kb_name,
@@ -193,7 +198,9 @@ class ChatAgent(BaseAgent):
                 )
                 rag_answer = rag_result.get("answer", "")
                 if rag_answer:
+                    # 上下文
                     context_parts.append(f"[Knowledge Base: {kb_name}]\n{rag_answer}")
+                    # 源数据
                     sources["rag"].append(
                         {
                             "kb_name": kb_name,
@@ -250,7 +257,7 @@ class ChatAgent(BaseAgent):
         system_prompt = self.get_prompt("system", "You are a helpful AI assistant.")
         messages.append({"role": "system", "content": system_prompt})
 
-        # Add context if available
+        # Add context if available (RAG/Web)
         if context:
             context_template = self.get_prompt("context_template", "Reference context:\n{context}")
             context_msg = context_template.format(context=context)
@@ -408,6 +415,7 @@ class ChatAgent(BaseAgent):
             # Return async generator for streaming
             async def stream_generator():
                 full_response = ""
+                # 事件驱动，等待 LLM 生成响应，生成后通过 yield 返回
                 async for chunk in self.generate_stream(messages):
                     full_response += chunk
                     yield {"type": "chunk", "content": chunk}

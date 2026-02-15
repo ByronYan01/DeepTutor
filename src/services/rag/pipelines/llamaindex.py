@@ -258,6 +258,7 @@ class LlamaIndexPipeline:
 
                 # Use retriever instead of query_engine to avoid LLM requirement
                 retriever = index.as_retriever(similarity_top_k=top_k)
+                # 会调用嵌入模型。LlamaIndex 内部需要把 query 字符串转成向量，才能和索引中预先计算好的文档向量做相似度比较
                 nodes = retriever.retrieve(query)
                 return nodes
 

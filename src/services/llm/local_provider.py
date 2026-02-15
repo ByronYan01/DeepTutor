@@ -89,7 +89,8 @@ async def complete(
 
     timeout = aiohttp.ClientTimeout(total=kwargs.get("timeout", DEFAULT_TIMEOUT))
 
-    async with aiohttp.ClientSession(timeout=timeout) as session:
+    # 禁用代理
+    async with aiohttp.ClientSession(timeout=timeout, trust_env=False) as session:
         async with session.post(url, json=data, headers=headers) as response:
             if response.status != 200:
                 error_text = await response.text()
@@ -172,7 +173,7 @@ async def stream(
     timeout = aiohttp.ClientTimeout(total=kwargs.get("timeout", DEFAULT_TIMEOUT))
 
     try:
-        async with aiohttp.ClientSession(timeout=timeout) as session:
+        async with aiohttp.ClientSession(timeout=timeout, trust_env=False) as session:
             async with session.post(url, json=data, headers=headers) as response:
                 if response.status != 200:
                     error_text = await response.text()
@@ -294,7 +295,7 @@ async def fetch_models(
 
     timeout = aiohttp.ClientTimeout(total=30)
 
-    async with aiohttp.ClientSession(timeout=timeout) as session:
+    async with aiohttp.ClientSession(timeout=timeout, trust_env=False) as session:
         # Try Ollama /api/tags first
         is_ollama = ":11434" in base_url or "ollama" in base_url.lower()
         if is_ollama:
