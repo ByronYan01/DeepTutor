@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>监督学习与无监督学习</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #F8FAFC 0%, #EFF6FF 100%);
+      min-height: 100vh;
+      padding: 1.5rem;
+      color: #1E293B;
+      width: 100%;
+      max-width: 100%;
+      overflow-x: hidden;
+      overflow-y: auto;
+    }
+    .container {
+      max-width: 100%;
+      width: 100%;
+      margin: 0 auto;
+      padding: 1.5rem;
+    }
+    .info-card {
+      background: white;
+      border-radius: 0.75rem;
+      padding: 1.25rem;
+      border-left: 4px solid #3B82F6;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      transition: transform 0.2s;
+    }
+    .info-card.expanded {
+      transform: scale(1.05);
+    }
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+    }
+    .tab-container {
+      margin-bottom: 2rem;
+    }
+    .tabs-header {
+      display: flex;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+    .tab-btn {
+      background: transparent;
+      border: none;
+      padding: 0.75rem 1.5rem;
+      border-bottom: 2px solid transparent;
+      color: #6B7280;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    .tab-btn:hover {
+      color: #3B82F6;
+    }
+    .tab-btn.active {
+      color: #3B82F6;
+      border-bottom-color: #3B82F6;
+      font-weight: 600;
+    }
+    .tabs-content {
+      display: none;
+      padding: 1rem 0;
+    }
+    .tabs-content.active {
+      display: block;
+    }
+    .formula-box {
+      background: #F0F9FF;
+      border-radius: 0.75rem;
+      padding: 1rem;
+      margin: 1rem 0;
+      border: 1px solid #FCD34D;
+    }
+    .formula-vars {
+      display: flex;
+      justify-content: center;
+      gap: 2rem;
+      font-size: 0.8rem;
+      color: #78350F;
+    }
+    .formula-vars strong {
+      color: #E2E8F0;
+      font-weight: 600;
+    }
+    .code-block {
+      background: #1E293B;
+      border-radius: 0.75rem;
+      overflow: hidden;
+      margin: 1rem 0;
+    }
+    .code-header {
+      background: #334155;
+      padding: 0.5rem 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .code-header button {
+      background: transparent;
+      border: 1px solid #475569;
+      color: #94A3B8;
+      padding: 0.25rem 0.5rem;
+      border-radius: 0.25rem;
+      cursor: pointer;
+      font-size: 0.7rem;
+    }
+    .code-header button:hover {
+      background: #FCD34D;
+    }
+    .code-header button.copy-button {
+      border-left: 2px solid #10B981;
+    }
+    .code-header button.copy-button.active {
+      border-left-color: #059669;
+    }
+    .tip-box, .warning-box {
+      background: linear-gradient(135deg, #EEF2FF, #E0E7FF);
+      border-radius: 1rem;
+      padding: 1.5rem;
+      margin: 1rem 0;
+      border: 1px solid #3730A3;
+    }
+    .tip-box {
+      border-left: 4px solid #10B981;
+    }
+    .tip-box span {
+      color: #059669;
+    }
+    .warning-box {
+      border-left: 4px solid #F59E0B;
+    }
+    .warning-box span {
+      color: #D97706;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>监督学习与无监督学习</h1>
+    <div class="card-grid">
+      <div class="info-card">
+        <div style="font-size: 1.25rem; font-weight: 600; color: #1E40AF;">监督学习</div>
+        <p style="color: #475569;">监督学习是一种机器学习方法，通过使用带标签的训练数据来学习输入到输出的映射关系。常见的监督学习算法包括线性回归、逻辑回归、决策树、支持向量机和神经网络。</p>
+        <div style="margin-top: 1rem;">
+          <p>标签的作用：</p>
+          <ul>
+            <li>指导模型学习正确的映射关系。</li>
+            <li>评估模型性能。</li>
+          </ul>
+        </div>
+      </div>
+      <div class="info-card">
+        <div style="font-size: 1.25rem; font-weight: 600; color: #1E40AF;">无监督学习</div>
+        <p style="color: #475569;">无监督学习则使用没有标签的数据，模型需要自己发现数据中的模式和结构。常见算法包括 K-Means 聚类、层次聚类、PCA 降维和自编码器。</p>
+        <div style="margin-top: 1rem;">
+          <p>如何评估模型好坏：</p>
+          <ul>
+            <li>内部一致性：模型内部的簇是否紧密。</li>
+            <li>外部一致性：如果有一些已知的类别标签，模型能否正确地识别这些类别。</li>
+            <li>预测能力：模型能否准确预测新的未见过的数据。</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <div class="tab-container">
+      <div class="tabs-header">
+        <button class="tab-btn active" data-target="supervised-learning">监督学习</button>
+        <button class="tab-btn" data-target="unsupervised-learning">无监督学习</button>
+      </div>
+      <div class="tabs-content">
+        <div id="supervised-learning" class="tab-content active">
+          <div style="margin-top: 1rem;">
+            <p>监督学习的核心特点：</p>
+            <ul>
+              <li>有明确的「正确答案」用于指导学习。</li>
+              <li>常用的评估指标包括准确率、精确率、召回率等。</li>
+            </ul>
+          </div>
+        </div>
+        <div id="unsupervised-learning" class="tab-content">
+          <div style="margin-top: 1rem;">
+            <p>无监督学习的核心特点：</p>
+            <ul>
+              <li>没有明确的「正确答案」，需要自主发现数据中的隐藏结构。</li>
+              <li>常用的评估指标包括轮廓系数、Silhouette Score等。</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="formula-box">
+      <div style="text-align: center; color: #92400E; font-size: 1.1rem; margin-bottom: 0.75rem; font-weight: 600;">
+        监督学习与无监督学习的区别
+      </div>
+      <div style="text-align: center; font-size: 1.5rem; margin: 1rem 0;">
+        <div style="display: inline-block; padding: 0.5rem; background: #3B82F6; color: white; border-radius: 0.5rem; margin-right: 1rem;">
+          有标签
+        </div>
+        <div style="display: inline-block; padding: 0.5rem; background: #F59E0B; color: white; border-radius: 0.5rem;">
+          无标签
+        </div>
+      </div>
+      <div style="text-align: center; color: #78350F; font-size: 0.875rem; margin-top: 0.75rem;">
+        监督学习需要标签来指导学习，而无监督学习则需要自主发现数据结构。
+      </div>
+    </div>
+    <div class="code-block">
+      <div class="code-header">
+        <span style="color: #E2E8F0; font-weight: 600;">监督学习示例代码</span>
+        <button class="copy-button" data-target="supervised-code">复制</button>
+      </div>
+      <pre style="padding: 1rem; margin: 0; overflow-x: auto;">
+        <code style="color: #E2E8F0; font-family: 'Consolas', monospace; font-size: 0.875rem;">
+          def linear_regression(X, y):
+            # 计算权重
+            w = np.linalg.inv(X.T @ X) @ X.T @ y
+            return w
+        </code>
+      </pre>
+    </div>
+    <div class="tip-box">
+      <div style="font-weight: 600; color: #94A3B8; display: flex; align-items: center; gap: 0.5rem;">
+        💡 提示
+      </div>
+      <div style="color: #047857; margin-top: 0.5rem; font-size: 0.9rem;">
+        在监督学习中，标签是必不可少的，因为它们提供了学习的目标。而在无监督学习中，模型需要自己找到数据中的结构，因此标签不是必需的。
+      </div>
+    </div>
+    <div class="warning-box">
+      <div style="font-weight: 600; color: #D97706; display: flex; align-items: center; gap: 0.5rem;">
+        ⚠️ 注意
+      </div>
+      <div style="color: #92400E; margin-top: 0.5rem; font-size: 0.9rem;">
+        无监督学习的评估通常更加复杂，因为它缺乏明确的标签来进行直接比较。因此，需要更多的内部和外部一致性指标。
+      </div>
+    </div>
+  </div>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const tabButtons = document.querySelectorAll('.tab-btn');
+      const tabContents = document.querySelectorAll('.tab-content');
+
+      tabButtons.forEach(function(button) {
+        button.addEventListener('click', function() {
+          const targetId = this.getAttribute('data-target');
+          if (!targetId) return;
+
+          tabButtons.forEach(function(btn) {
+            btn.classList.remove('active');
+          });
+
+          tabContents.forEach(function(content) {
+            content.classList.remove('active');
+            content.style.display = 'none';
+          });
+
+          this.classList.add('active');
+          const targetContent = document.getElementById(targetId);
+          if (targetContent) {
+            targetContent.classList.add('active');
+            targetContent.style.display = 'block';
+          }
+        });
+      });
+
+      const firstBtn = tabButtons[0];
+      if (firstBtn) {
+        firstBtn.click();
+      }
+
+      const copyButton = document.querySelector('.copy-button');
+      if (copyButton) {
+        copyButton.addEventListener('click', function() {
+          const codeBlock = document.querySelector('.code-block pre code');
+          if (codeBlock) {
+            navigator.clipboard.writeText(codeBlock.innerText);
+            this.classList.add('active');
+            setTimeout(() => this.classList.remove('active'), 1000);
+          }
+        });
+      }
+    });
+  </script>
+</body>
+</html>

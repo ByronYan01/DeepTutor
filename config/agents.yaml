@@ -32,7 +32,9 @@ question:
 # Agents: locate_agent, interactive_agent, chat_agent, summary_agent
 guide:
   temperature: 0.5
-  max_tokens: 16192
+  # llm 最大输出限制 8k
+  max_tokens: 8192
+  # max_tokens: 16192
 
 # IdeaGen Module - Idea generation agents
 # Agents: material_organizer_agent, idea_generation workflow

@@ -104,7 +104,16 @@ class LocateAgent(BaseAgent):
             )
 
             try:
-                result = json.loads(response)
+                # Strip markdown code block wrapper if present (e.g. ```json ... ```)
+                cleaned = response.strip()
+                if cleaned.startswith("```"):
+                    # Remove opening ```json or ```
+                    first_newline = cleaned.index("\n")
+                    cleaned = cleaned[first_newline + 1:]
+                    # Remove closing ```
+                    if cleaned.endswith("```"):
+                        cleaned = cleaned[:-3].strip()
+                result = json.loads(cleaned)
 
                 if isinstance(result, list):
                     knowledge_points = result

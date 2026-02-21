@@ -63,6 +63,8 @@ class CustomEmbedding(BaseEmbedding):
     def _get_query_embedding(self, query: str) -> List[float]:
         """Sync version - called by LlamaIndex sync API."""
         # Use nest_asyncio to allow nested event loops
+        # LlamaIndex 库在某些内部调用时强制要求同步返回结果
+        # 但我们的底层 Client 是异步的，所以这里通过 asyncio.run “强行”跑异步
         import nest_asyncio
 
         nest_asyncio.apply()
@@ -175,9 +177,11 @@ class LlamaIndexPipeline:
             self.logger.info(f"Creating VectorStoreIndex with {len(documents)} documents...")
 
             # Run sync LlamaIndex code in thread pool to avoid blocking async event loop
+            # 获取当前的异步事件循环
             loop = asyncio.get_event_loop()
+            # 在专门的线程池中运行同步函数（后台线程运行），避免阻塞主线程
             index = await loop.run_in_executor(
-                None,  # Use default ThreadPoolExecutor
+                None,  # 使用默认的线程池 Use default ThreadPoolExecutor
                 lambda: VectorStoreIndex.from_documents(documents, show_progress=True),
             )
 

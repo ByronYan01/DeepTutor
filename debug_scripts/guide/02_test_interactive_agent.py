@@ -201,9 +201,10 @@ async def main():
 
     from src.agents.base_agent import BaseAgent
     stats = BaseAgent.get_stats("guide")
-    print(f"  总调用次数:   {stats.total_calls}")
-    print(f"  总输入 tokens: {stats.total_input_tokens}")
-    print(f"  总输出 tokens: {stats.total_output_tokens}")
+    print(f"  总调用次数:   {len(stats.calls)}")
+    print(f"  总输入 tokens: {stats.total_prompt_tokens}")
+    print(f"  总输出 tokens: {stats.total_completion_tokens}")
+    print(f"  总费用:       ${stats.total_cost:.4f}")
     print(f"  （注意：InteractiveAgent 的 prompt 很长，输入 token 消耗较大）")
 
     print("\n" + "=" * 60)

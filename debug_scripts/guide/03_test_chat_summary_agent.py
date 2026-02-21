@@ -298,9 +298,10 @@ async def main():
     from src.agents.base_agent import BaseAgent
     stats = BaseAgent.get_stats("guide")
     print(f"  Guide 模块总计:")
-    print(f"    调用次数:   {stats.total_calls}")
-    print(f"    输入 tokens: {stats.total_input_tokens}")
-    print(f"    输出 tokens: {stats.total_output_tokens}")
+    print(f"    调用次数:   {len(stats.calls)}")
+    print(f"    输入 tokens: {stats.total_prompt_tokens}")
+    print(f"    输出 tokens: {stats.total_completion_tokens}")
+    print(f"    总费用:       ${stats.total_cost:.4f}")
 
     print("\n" + "=" * 60)
     print("Layer 3 测试完成!")
