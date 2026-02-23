@@ -47,9 +47,10 @@
 
 ---
 
-## 第五阶段：IdeaGen 素材整理（1 个 Agent）
+## 第五阶段：IdeaGen 素材整理（1 个 Agent） ✅
 
-- [ ] material_organizer_agent — 素材整理 Agent
+- [x] material_organizer_agent — 素材整理 Agent
+- [x] idea_generation_workflow — 研究想法生成工作流（4 步管道）
 
 ---
 
@@ -114,6 +115,7 @@
 | `debug_scripts/01-05 调试脚本`          | ✅     |
 | `know/agent/CoWriter.md`                | ✅     |
 | `know/agent/Guide.md`                   | ✅     |
-| `know/agent/Question.md`                | 待创建 |
-| `know/agent/Research.md`                | 待创建 |
+| `know/agent/Question.md`                | ✅     |
+| `know/agent/IdeaGen.md`                 | ✅     |
+| `know/agent/Research.md`                | ✅     |
 | `know/agent/Solve.md`                   | 待创建 |

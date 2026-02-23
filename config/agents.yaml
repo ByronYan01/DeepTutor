@@ -20,7 +20,7 @@ solve:
 # Agents: rephrase_agent, decompose_agent, manager_agent, research_agent, note_agent, reporting_agent
 research:
   temperature: 0.5
-  max_tokens: 12000
+  max_tokens: 8192
 
 # Question Module - Question generation agents
 # Agents: question_generation_agent, question_validation_agent

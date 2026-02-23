@@ -23,7 +23,7 @@ class RetrieveAgent(BaseAgent):
     - Execute RAG searches in parallel
     - Merge and summarize retrieval results
     """
-
+    # 实例化类时，触发初始化函数
     def __init__(
         self,
         kb_name: str | None = None,
@@ -49,6 +49,7 @@ class RetrieveAgent(BaseAgent):
         self.kb_name = kb_name
         self.rag_mode = rag_mode
 
+    # 主入口：生成查询 -> 检索 -> 总结，就是调用此类中的其他方法
     async def process(
         self,
         requirement: dict[str, Any] | str,
