@@ -66,16 +66,17 @@
 
 ---
 
-## 第七阶段：Solve 问题求解（5 个 Agent）
+## 第七阶段：Solve 问题求解（7 个 Agent） ✅
 
-- [ ] analysis_loop/investigate_agent — 调查分析
-- [ ] analysis_loop/note_agent — 分析笔记
-- [ ] solve_loop/manager_agent — 求解管理器
-- [ ] solve_loop/solve_agent — 求解执行
-- [ ] solve_loop/tool_agent — 工具调用
-- [ ] solve_loop/precision_answer_agent — 精确回答
-- [ ] solve_loop/response_agent — 最终响应
-- [ ] 双循环架构（analysis_loop + solve_loop）
+- [x] analysis_loop/investigate_agent — 调查分析
+- [x] analysis_loop/note_agent — 分析笔记
+- [x] solve_loop/manager_agent — 求解管理器
+- [x] solve_loop/solve_agent — 求解执行
+- [x] solve_loop/tool_agent — 工具调用
+- [x] solve_loop/precision_answer_agent — 精确回答
+- [x] solve_loop/response_agent — 最终响应
+- [x] 双循环架构（analysis_loop + solve_loop）
+- [x] 三种 Memory 系统（InvestigateMemory + SolveMemory + CitationMemory）
 
 ---
 

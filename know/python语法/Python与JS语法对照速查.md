@@ -111,8 +111,22 @@ for item in arr:            # JS: for (const item of arr)
 for i, item in enumerate(arr):  # JS: arr.forEach((item, i) => ...)
 for key, val in d.items():  # JS: Object.entries(d).forEach(([key, val]) => ...)
 
+# enumerate 指定起始值 + 切片遍历（跳过已处理的元素）
+for idx, item in enumerate(arr[1:], 2):   # 从第 2 个元素开始遍历，idx 从 2 开始
+# JS: arr.slice(1).forEach((item, i) => { const idx = i + 2; ... })
+
 # async 循环
 async for chunk in stream:  # JS: for await (const chunk of stream)
+```
+
+## 成员检测 / includes
+
+```python
+# Python — 用 in 检查值是否在集合中
+status in ("waiting", "done")       # JS: ["waiting", "done"].includes(status)
+x in [1, 2, 3]                      # JS: [1, 2, 3].includes(x)
+x not in ("a", "b")                 # JS: !["a", "b"].includes(x)
+char in "aeiou"                     # JS: "aeiou".includes(char)
 ```
 
 ## 类
