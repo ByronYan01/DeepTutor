@@ -18,6 +18,9 @@ class OpenAICompatibleEmbeddingAdapter(BaseEmbeddingAdapter):
         "text-embedding-ada-002": 1536,
     }
 
+    # 缓存不支持自定义维度的模型名称，避免重复尝试
+    _models_without_custom_dims: set = set()
+
     async def embed(self, request: EmbeddingRequest) -> EmbeddingResponse:
         headers = {
             "Content-Type": "application/json",
@@ -27,14 +30,19 @@ class OpenAICompatibleEmbeddingAdapter(BaseEmbeddingAdapter):
         else:
             headers["Authorization"] = f"Bearer {self.api_key}"
 
+        model_name = request.model or self.model
         payload = {
             "input": request.texts,
-            "model": request.model or self.model,
+            "model": model_name,
             "encoding_format": request.encoding_format or "float",
         }
 
-        if request.dimensions or self.dimensions:
-            payload["dimensions"] = request.dimensions or self.dimensions
+        # 如果模型已知不支持自定义维度，则不发送 dimensions 参数
+        dims_value = request.dimensions or self.dimensions
+        should_send_dims = dims_value and model_name not in self._models_without_custom_dims
+
+        if should_send_dims:
+            payload["dimensions"] = dims_value
 
         url = f"{self.base_url.rstrip('/')}/embeddings"
         if self.api_version:
@@ -48,6 +56,18 @@ class OpenAICompatibleEmbeddingAdapter(BaseEmbeddingAdapter):
         # 由于外网代理导致无法访问局域网代理，因此需要禁用代理
         async with httpx.AsyncClient(timeout=self.request_timeout, proxy=None) as client:
             response = await client.post(url, json=payload, headers=headers)
+
+            # 如果返回 400 且是因为不支持自定义维度，则去掉 dimensions 参数重试
+            if response.status_code == 400 and should_send_dims:
+                error_text = response.text.lower()
+                if "matryoshka" in error_text or "dimensions" in error_text:
+                    logger.warning(
+                        f"模型 '{model_name}' 不支持自定义维度，将去掉 dimensions 参数重试"
+                    )
+                    # 记住该模型不支持自定义维度，后续请求直接跳过
+                    self._models_without_custom_dims.add(model_name)
+                    payload.pop("dimensions", None)
+                    response = await client.post(url, json=payload, headers=headers)
 
             if response.status_code >= 400:
                 logger.error(f"HTTP {response.status_code} response body: {response.text}")
