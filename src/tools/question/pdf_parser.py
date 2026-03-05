@@ -104,16 +104,38 @@ def parse_pdf_with_mineru(pdf_path: str, output_base_dir: str = None):
         temp_output = output_base_dir / "temp_mineru_output"
         temp_output.mkdir(parents=True, exist_ok=True)
 
-        cmd = [mineru_cmd, "-p", str(pdf_path), "-o", str(temp_output)]
+        # 使用 --source modelscope 从国内 ModelScope 下载模型，避免访问 HuggingFace 失败
+        cmd = [mineru_cmd, "-p", str(pdf_path), "-o", str(temp_output), "--source", "modelscope"]
 
         print(f"🔧 Executing command: {' '.join(cmd)}")
+        print("⏳ MinerU 正在解析，请耐心等待（首次运行需下载模型）...")
+        sys.stdout.flush()
 
-        result = subprocess.run(cmd, capture_output=True, text=True, check=False, shell=False)
+        # 使用 Popen 实时流式读取，避免 capture_output=True 导致管道缓冲区死锁
+        # 当 mineru 输出超过系统管道缓冲区（约64KB）时，subprocess.run(capture_output=True)
+        # 会导致两端互相等待：mineru 等管道被读取，run() 等进程结束
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,  # 合并 stderr 到 stdout 统一读取
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            bufsize=1,  # 行缓冲，确保每行立即可读
+            shell=False,
+        )
 
-        if result.returncode != 0:
-            print("✗ MinerU parsing failed:")
-            print(f"Stdout: {result.stdout}")
-            print(f"Stderr: {result.stderr}")
+        # 逐行读取并实时打印，防止缓冲区积压
+        for line in process.stdout:
+            line_stripped = line.rstrip()
+            if line_stripped:
+                print(f"  [MinerU] {line_stripped}")
+                sys.stdout.flush()
+
+        return_code = process.wait()
+
+        if return_code != 0:
+            print(f"✗ MinerU parsing failed (exit code {return_code})")
             if temp_output.exists():
                 shutil.rmtree(temp_output)
             return False
