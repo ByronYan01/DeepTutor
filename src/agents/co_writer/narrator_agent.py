@@ -338,7 +338,8 @@ class NarratorAgent(BaseAgent):
             )
 
             # Save audio to file
-            await response.stream_to_file(audio_path)
+            # stream_to_file is a synchronous method in the openai sdk
+            response.stream_to_file(audio_path)
 
             self.logger.info(f"Audio saved to: {audio_path}")
 
