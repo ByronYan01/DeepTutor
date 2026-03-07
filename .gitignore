@@ -2,6 +2,7 @@
 # AI-Tutor Project .gitignore
 # ============================================
 .windsurf
+.spec-workflow
 # ============================================
 # User Generated Data and Outputs
 # ============================================

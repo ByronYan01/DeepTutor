@@ -716,7 +716,7 @@ export default function IdeaGenPage() {
                         {idea.research_ideas.slice(0, 3).map((ri, idx) => (
                           <span
                             key={idx}
-                            className="text-xs bg-slate-100 dark:bg-slate-600 text-slate-600 dark:text-slate-300 px-2 py-1 rounded-lg line-clamp-1 max-w-[200px]"
+                            className="text-xs bg-slate-100 dark:bg-slate-600 text-slate-600 dark:text-slate-300 px-2 py-1 rounded-lg max-w-[200px]"
                           >
                             {ri.substring(0, 50)}...
                           </span>

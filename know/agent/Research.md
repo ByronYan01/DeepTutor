@@ -6,14 +6,14 @@
 
 ## 模块概览
 
-| Agent | 阶段 | 职责 | 源码 |
-|-------|------|------|------|
-| RephraseAgent | Planning | 查询改写（可选，支持多轮交互确认） | `agents/rephrase_agent.py` |
-| DecomposeAgent | Planning | 将主题分解为子主题（RAG 增强） | `agents/decompose_agent.py` |
-| ManagerAgent | Researching | 队列调度中心，任务分发与状态管理 | `agents/manager_agent.py` |
-| ResearchAgent | Researching | 执行研究循环：充分性检查 + 查询规划 + 工具选择 | `agents/research_agent.py` |
-| NoteAgent | Researching | 信息压缩摘要，将工具原始输出转为 ToolTrace | `agents/note_agent.py` |
-| ReportingAgent | Reporting | 去重 → 大纲生成 → 逐段撰写 → 引用参考文献 | `agents/reporting_agent.py` |
+| Agent          | 阶段        | 职责                                           | 源码                        |
+| -------------- | ----------- | ---------------------------------------------- | --------------------------- |
+| RephraseAgent  | Planning    | 查询改写（可选，支持多轮交互确认）             | `agents/rephrase_agent.py`  |
+| DecomposeAgent | Planning    | 将主题分解为子主题（RAG 增强）                 | `agents/decompose_agent.py` |
+| ManagerAgent   | Researching | 队列调度中心，任务分发与状态管理               | `agents/manager_agent.py`   |
+| ResearchAgent  | Researching | 执行研究循环：充分性检查 + 查询规划 + 工具选择 | `agents/research_agent.py`  |
+| NoteAgent      | Researching | 信息压缩摘要，将工具原始输出转为 ToolTrace     | `agents/note_agent.py`      |
+| ReportingAgent | Reporting   | 去重 → 大纲生成 → 逐段撰写 → 引用参考文献      | `agents/reporting_agent.py` |
 
 ### 核心数据结构
 
@@ -141,6 +141,7 @@ sequenceDiagram
 ## 各 Agent 的 process() 调用链路
 
 ### RephraseAgent.process()
+
 ```
 process(user_input, iteration, previous_result)
   → get_prompt("system", "role")          # 研究策略专家角色
@@ -150,6 +151,7 @@ process(user_input, iteration, previous_result)
 ```
 
 ### DecomposeAgent.process()
+
 ```
 process(topic, num_subtopics, mode="manual|auto")
   ├── manual 模式:
@@ -162,6 +164,7 @@ process(topic, num_subtopics, mode="manual|auto")
 ```
 
 ### ResearchAgent.process()（核心研究循环）
+
 ```
 process(topic_block, call_tool_callback, note_agent, citation_manager, ...)
   while iteration < max_iterations:
@@ -178,6 +181,7 @@ process(topic_block, call_tool_callback, note_agent, citation_manager, ...)
 ```
 
 ### NoteAgent.process()
+
 ```
 process(tool_type, query, raw_answer, citation_id, topic, context)
   → get_prompt("system", "role")           # 信息提取与知识整理专家
@@ -188,6 +192,7 @@ process(tool_type, query, raw_answer, citation_id, topic, context)
 ```
 
 ### ReportingAgent.process()
+
 ```
 process(queue, topic, progress_callback)
   → _deduplicate_blocks()                  # LLM 去重
@@ -205,23 +210,46 @@ process(queue, topic, progress_callback)
 
 配置通过 `config/main.yaml` 的 `research:` 节管理：
 
-| 配置项 | 默认值 | 说明 |
-|--------|--------|------|
-| `planning.rephrase.enabled` | true | 是否启用主题改写 |
-| `planning.decompose.mode` | auto | manual（固定数量）或 auto（LLM 自决） |
-| `researching.max_iterations` | 5 | 每个子主题最大研究迭代数 |
-| `researching.execution_mode` | series | series（串行）或 parallel（并行） |
-| `researching.enable_*` | true | 各工具开关（rag/web/paper/code） |
-| `queue.max_length` | 5 | 最大子主题数 |
+| 配置项                       | 默认值 | 说明                                  |
+| ---------------------------- | ------ | ------------------------------------- |
+| `planning.rephrase.enabled`  | true   | 是否启用主题改写                      |
+| `planning.decompose.mode`    | auto   | manual（固定数量）或 auto（LLM 自决） |
+| `researching.max_iterations` | 5      | 每个子主题最大研究迭代数              |
+| `researching.execution_mode` | series | series（串行）或 parallel（并行）     |
+| `researching.enable_*`       | true   | 各工具开关（rag/web/paper/code）      |
+| `queue.max_length`           | 5      | 最大子主题数                          |
+
+#### 工具开关说明
+
+| 配置项         | 对应工具                   | 数据来源                               |
+| -------------- | -------------------------- | -------------------------------------- |
+| `enable_rag`   | `rag_hybrid` / `rag_naive` | 本地知识库（已上传的文档）             |
+| `enable_web`   | `web_search`               | 互联网网页                             |
+| `enable_paper` | `paper_search`             | 学术论文数据库（如 arXiv、语义学者等） |
+| `enable_code`  | `run_code`                 | Python 代码执行环境                    |
+
+> 未启用的工具**不会出现**在发给 LLM 的 Prompt 中，LLM 不会选择它。
+
+#### 三阶段工具引导策略
+
+ResearchAgent 会通过 `_generate_tool_phase_guidance()` 根据已启用工具动态生成分阶段建议：
+
+| 阶段           | 建议工具                                  | 目的                   |
+| -------------- | ----------------------------------------- | ---------------------- |
+| 阶段 1（早期） | `rag_hybrid` / `rag_naive` / `query_item` | 用知识库构建基础知识   |
+| 阶段 2（中期） | + `paper_search` / `web_search`           | 引入外部工具拓展深度   |
+| 阶段 3（晚期） | + `run_code`                              | 填补空白、验证、可视化 |
+
+> 若仅开启 RAG 工具，只生成阶段 1 建议并附注「仅 RAG 可用，请多角度探索」，阶段 2/3 不出现。
 
 ### 预设模式
 
-| 预设 | 子主题数 | 迭代数 | 模式 | 场景 |
-|------|---------|--------|------|------|
-| quick | 1 | 1 | fixed | 快速概览 |
-| medium | 5 | 4 | fixed | 平衡深度 |
-| deep | 8 | 7 | fixed | 彻底研究 |
-| auto | ≤8 | ≤6 | flexible | Agent 自决 |
+| 预设   | 子主题数 | 迭代数 | 模式     | 场景       |
+| ------ | -------- | ------ | -------- | ---------- |
+| quick  | 1        | 1      | fixed    | 快速概览   |
+| medium | 5        | 4      | fixed    | 平衡深度   |
+| deep   | 8        | 7      | fixed    | 彻底研究   |
+| auto   | ≤8       | ≤6     | flexible | Agent 自决 |
 
 ---
 
@@ -229,14 +257,14 @@ process(queue, topic, progress_callback)
 
 ### 项目中两种架构模式的对比
 
-| 维度 | Workflow 模式（CoWriter/Guide/IdeaGen） | Agent 模式（Research） |
-|------|----------------------------------------|----------------------|
-| 流程控制 | 代码写死 A→B→C 顺序 | LLM 决定继续/停止 |
-| 工具选择 | 无（或固定调用 RAG） | LLM 从工具列表中动态选择 |
-| 循环 | 无，数据单向流过 | 有（while 循环，LLM 决定何时 break） |
-| 动态性 | 输入确定则路径确定 | 同一输入可能走不同路径 |
-| 新任务发现 | 无 | LLM 可发现新子主题加入队列 |
-| 停止条件 | 固定步骤数 | LLM 判断知识是否充分 |
+| 维度       | Workflow 模式（CoWriter/Guide/IdeaGen） | Agent 模式（Research）               |
+| ---------- | --------------------------------------- | ------------------------------------ |
+| 流程控制   | 代码写死 A→B→C 顺序                     | LLM 决定继续/停止                    |
+| 工具选择   | 无（或固定调用 RAG）                    | LLM 从工具列表中动态选择             |
+| 循环       | 无，数据单向流过                        | 有（while 循环，LLM 决定何时 break） |
+| 动态性     | 输入确定则路径确定                      | 同一输入可能走不同路径               |
+| 新任务发现 | 无                                      | LLM 可发现新子主题加入队列           |
+| 停止条件   | 固定步骤数                              | LLM 判断知识是否充分                 |
 
 > Workflow 模式本质是**带 LLM 的 Pipeline**，LLM 扮演"工人"；Research 模块则让 LLM 拥有**有限但真实的决策权**。
 
@@ -244,11 +272,11 @@ process(queue, topic, progress_callback)
 
 Research 模块中，LLM 在以下关键节点自主做决定：
 
-| 决策点 | 方法 | LLM 决定什么 |
-|--------|------|-------------|
-| 充分性判断 | `check_sufficiency()` | "当前知识够不够？要不要继续研究？" |
-| 查询规划 | `generate_query_plan()` | "用哪个工具？查什么内容？查询怎么写？" |
-| 动态分裂 | `new_sub_topic`（查询规划的副产物） | "发现了重要新分支（得分≥0.85），是否加入队列？" |
+| 决策点     | 方法                                | LLM 决定什么                                    |
+| ---------- | ----------------------------------- | ----------------------------------------------- |
+| 充分性判断 | `check_sufficiency()`               | "当前知识够不够？要不要继续研究？"              |
+| 查询规划   | `generate_query_plan()`             | "用哪个工具？查什么内容？查询怎么写？"          |
+| 动态分裂   | `new_sub_topic`（查询规划的副产物） | "发现了重要新分支（得分≥0.85），是否加入队列？" |
 
 ### Prompt 引导决策的机制
 
@@ -258,11 +286,11 @@ LLM 的决策不是完全自由的，而是通过**动态 Prompt 片段**进行�
 
 根据配置中**启用了哪些工具**，动态生成三阶段建议（未启用的工具不出现在 Prompt 中）：
 
-| 阶段 | 建议工具 | 目的 |
-|------|---------|------|
-| 阶段 1（早期） | `rag_hybrid` / `rag_naive` / `query_item` | 用知识库构建基础知识 |
-| 阶段 2（中期） | + `paper_search` / `web_search` | 引入外部工具拓展深度 |
-| 阶段 3（晚期） | + `run_code` | 填补空白、验证、可视化 |
+| 阶段           | 建议工具                                  | 目的                   |
+| -------------- | ----------------------------------------- | ---------------------- |
+| 阶段 1（早期） | `rag_hybrid` / `rag_naive` / `query_item` | 用知识库构建基础知识   |
+| 阶段 2（中期） | + `paper_search` / `web_search`           | 引入外部工具拓展深度   |
+| 阶段 3（晚期） | + `run_code`                              | 填补空白、验证、可视化 |
 
 > 如果只开了 RAG 工具，只会生成阶段 1 + 一句"仅 RAG 可用，请多角度探索"，阶段 2/3 不会出现。
 
@@ -288,14 +316,14 @@ LLM 的决策不是完全自由的，而是通过**动态 Prompt 片段**进行�
 
 Research 模块**不是完全自主的 Agent**，有以下硬性约束：
 
-| 约束 | 说明 |
-|------|------|
-| 三阶段硬编码 | Planning → Researching → Reporting 顺序不可更改 |
-| `max_iterations` 上限 | 无论 LLM 怎么判断，到达上限必须停止 |
-| `fixed` 模式 | 强制 LLM 不要过早声明"知识充足" |
-| 无自我反思 | 不会"我之前的策略错了，换个方向" |
-| 无重试逻辑 | 工具返回低质量结果时不会自动重试 |
-| 无多步规划 | 每次只选一个工具，不会规划"先查 A 再查 B" |
+| 约束                  | 说明                                            |
+| --------------------- | ----------------------------------------------- |
+| 三阶段硬编码          | Planning → Researching → Reporting 顺序不可更改 |
+| `max_iterations` 上限 | 无论 LLM 怎么判断，到达上限必须停止             |
+| `fixed` 模式          | 强制 LLM 不要过早声明"知识充足"                 |
+| 无自我反思            | 不会"我之前的策略错了，换个方向"                |
+| 无重试逻辑            | 工具返回低质量结果时不会自动重试                |
+| 无多步规划            | 每次只选一个工具，不会规划"先查 A 再查 B"       |
 
 ### 设计定位
 
@@ -313,14 +341,15 @@ Research 模块采用**框架约束 + 局部自主**的模式，是目前工业�
 
 ## 调试脚本索引
 
-| 脚本 | 测试层 | 是否调 LLM | 说明 |
-|------|--------|-----------|------|
-| `debug_scripts/research/01_test_data_structures.py` | Layer 1 | ❌ | 纯数据结构操作 |
-| `debug_scripts/research/02_test_note_agent.py` | Layer 2 | ✅ | NoteAgent 摘要生成 |
-| `debug_scripts/research/03_test_research_agent.py` | Layer 3 | ✅ | ResearchAgent 研究循环（模拟工具） |
-| `debug_scripts/research/04_test_pipeline.py` | Layer 4 | ✅ | Pipeline 三阶段端到端 |
+| 脚本                                                | 测试层  | 是否调 LLM | 说明                               |
+| --------------------------------------------------- | ------- | ---------- | ---------------------------------- |
+| `debug_scripts/research/01_test_data_structures.py` | Layer 1 | ❌         | 纯数据结构操作                     |
+| `debug_scripts/research/02_test_note_agent.py`      | Layer 2 | ✅         | NoteAgent 摘要生成                 |
+| `debug_scripts/research/03_test_research_agent.py`  | Layer 3 | ✅         | ResearchAgent 研究循环（模拟工具） |
+| `debug_scripts/research/04_test_pipeline.py`        | Layer 4 | ✅         | Pipeline 三阶段端到端              |
 
 运行方式：
+
 ```bash
 uv run python debug_scripts/research/01_test_data_structures.py
 uv run python debug_scripts/research/02_test_note_agent.py
