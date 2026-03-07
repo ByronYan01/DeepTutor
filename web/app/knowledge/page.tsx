@@ -191,6 +191,38 @@ export default function KnowledgePage() {
       "tiff",
       "tif",
     ],
+    // RAGAnything (Docling): Better for Office documents (.docx, .pptx, .xlsx) and HTML
+    raganything_docling: [
+      "pdf",
+      "doc",
+      "docx",
+      "ppt",
+      "pptx",
+      "xls",
+      "xlsx",
+      "txt",
+      "md",
+      "markdown",
+      "json",
+      "csv",
+      "html",
+      "htm",
+      "xml",
+      "yaml",
+      "yml",
+      "toml",
+      "tex",
+      "rst",
+      "log",
+      "png",
+      "jpg",
+      "jpeg",
+      "gif",
+      "webp",
+      "bmp",
+      "tiff",
+      "tif",
+    ],
   };
 
   // Human-readable file type hints for each provider
@@ -198,6 +230,7 @@ export default function KnowledgePage() {
     llamaindex: "PDF, TXT, MD, JSON, CSV, HTML, XML...",
     lightrag: "PDF, TXT, MD, JSON, CSV, HTML, XML...",
     raganything: "PDF, Word, 图片, TXT, MD, JSON, CSV, HTML...",
+    raganything_docling: "PDF, Word, PPT, Excel, 图片, HTML, TXT...",
   };
 
   // Get supported extensions for current provider

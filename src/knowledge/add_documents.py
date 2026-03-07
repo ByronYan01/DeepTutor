@@ -819,7 +819,7 @@ Example usage:
         doc_files.extend(args.docs)
     if args.docs_dir:
         p = Path(args.docs_dir)
-        for ext in ["*.pdf", "*.docx", "*.txt", "*.md"]:
+        for ext in ["*.pdf", "*.docx", "*.doc", "*.pptx", "*.ppt", "*.xlsx", "*.xls", "*.txt", "*.md"]:
             doc_files.extend([str(f) for f in p.glob(ext)])
 
     if not doc_files:

@@ -23,7 +23,7 @@ class DocumentType(Enum):
     PDF = "pdf"  # Requires MinerU complex parsing
     TEXT = "text"  # Plain text, direct read
     MARKDOWN = "markdown"  # Structured text
-    DOCX = "docx"  # Word documents
+    OFFICE = "office"  # Office documents (Word, PowerPoint, Excel)
     IMAGE = "image"  # Images (may need OCR)
     UNKNOWN = "unknown"  # Unsupported
 
@@ -132,8 +132,8 @@ class FileTypeRouter:
         ".properties",
     }
 
-    # Word document extensions (special handling)
-    DOCX_EXTENSIONS = {".docx", ".doc"}
+    # Office document extensions (special handling)
+    OFFICE_EXTENSIONS = {".docx", ".doc", ".pptx", ".ppt", ".xlsx", ".xls"}
 
     # Image extensions (may need OCR)
     IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tiff", ".tif"}
@@ -155,8 +155,8 @@ class FileTypeRouter:
             return DocumentType.PDF
         elif ext in cls.TEXT_EXTENSIONS:
             return DocumentType.TEXT
-        elif ext in cls.DOCX_EXTENSIONS:
-            return DocumentType.DOCX
+        elif ext in cls.OFFICE_EXTENSIONS:
+            return DocumentType.OFFICE
         elif ext in cls.IMAGE_EXTENSIONS:
             return DocumentType.IMAGE
         else:
@@ -213,9 +213,9 @@ class FileTypeRouter:
                 needs_mineru.append(path)
             elif doc_type in (DocumentType.TEXT, DocumentType.MARKDOWN):
                 text_files.append(path)
-            elif doc_type == DocumentType.DOCX:
-                # DOCX files need special handling
-                # For now, route to MinerU which can handle them
+            elif doc_type == DocumentType.OFFICE:
+                # Office files need special handling
+                # Route to parser (Docling/MinerU) which can handle them
                 needs_mineru.append(path)
             elif doc_type == DocumentType.IMAGE:
                 # Images might need OCR - route to MinerU if multimodal is enabled
@@ -270,7 +270,7 @@ class FileTypeRouter:
             True if file requires MinerU
         """
         doc_type = cls.get_document_type(file_path)
-        return doc_type in (DocumentType.PDF, DocumentType.DOCX, DocumentType.IMAGE)
+        return doc_type in (DocumentType.PDF, DocumentType.OFFICE, DocumentType.IMAGE)
 
     @classmethod
     def is_text_readable(cls, file_path: str) -> bool:
@@ -309,9 +309,9 @@ class FileTypeRouter:
             return cls.MINERU_EXTENSIONS | text_extensions
 
         elif provider in ("raganything", "raganything_docling"):
-            # RAGAnything: PDF + Word + Images + all text files (full multimodal via MinerU)
+            # RAGAnything: PDF + Office + Images + all text files (full multimodal via Parser)
             return (
-                cls.MINERU_EXTENSIONS | cls.DOCX_EXTENSIONS | cls.IMAGE_EXTENSIONS | text_extensions
+                cls.MINERU_EXTENSIONS | cls.OFFICE_EXTENSIONS | cls.IMAGE_EXTENSIONS | text_extensions
             )
 
         else:
