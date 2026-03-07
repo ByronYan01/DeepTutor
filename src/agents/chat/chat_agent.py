@@ -255,13 +255,14 @@ class ChatAgent(BaseAgent):
 
         # System prompt
         system_prompt = self.get_prompt("system", "You are a helpful AI assistant.")
-        messages.append({"role": "system", "content": system_prompt})
 
         # Add context if available (RAG/Web)
         if context:
             context_template = self.get_prompt("context_template", "Reference context:\n{context}")
             context_msg = context_template.format(context=context)
-            messages.append({"role": "system", "content": context_msg})
+            system_prompt = f"{system_prompt}\n\n{context_msg}"
+
+        messages.append({"role": "system", "content": system_prompt})
 
         # Add conversation history
         for msg in history:
