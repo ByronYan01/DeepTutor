@@ -23,6 +23,7 @@ from src.api.utils.task_id_manager import TaskIDManager
 from src.logging import get_logger
 from src.services.config import load_config_with_main
 from src.services.llm import get_llm_config
+from src.services.llm.model_context import ModelContext, reset_model_context, set_model_context
 from src.services.settings.interface_settings import get_ui_language
 
 router = APIRouter()
@@ -113,6 +114,7 @@ async def websocket_ideagen(websocket: WebSocket):
     # Get task ID manager
     task_manager = TaskIDManager.get_instance()
     task_id = None
+    model_ctx_token = None
 
     try:
         # Receive request data
@@ -121,6 +123,11 @@ async def websocket_ideagen(websocket: WebSocket):
         record_ids = data.get("record_ids")
         direct_records = data.get("records")
         user_thoughts = data.get("user_thoughts", "")
+        request_model = data.get("model")
+
+        model_ctx_token = set_model_context(
+            ModelContext(request_id=None, request_model=request_model, source="ws_ideagen")
+        )
 
         logger.info(
             f"Received request: notebook_id={notebook_id}, record_ids={record_ids}, direct_records_count={len(direct_records) if direct_records else 0}"
@@ -429,6 +436,12 @@ async def websocket_ideagen(websocket: WebSocket):
         except (RuntimeError, WebSocketDisconnect, ConnectionError):
             pass  # Connection already closed
     finally:
+        if model_ctx_token is not None:
+            try:
+                reset_model_context(model_ctx_token)
+            except Exception as e:
+                logger.debug(f"Failed to reset model context in ideagen: {e}")
+
         try:
             await websocket.close()
             logger.info("WebSocket closed")

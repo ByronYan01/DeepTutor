@@ -23,6 +23,7 @@ from src.agents.co_writer.edit_agent import (
 from src.agents.co_writer.narrator_agent import NarratorAgent
 from src.logging import get_logger
 from src.services.config import load_config_with_main
+from src.services.llm.model_context import ModelContext, use_model_context
 from src.services.settings.interface_settings import get_ui_language
 from src.services.tts import get_tts_config
 
@@ -85,6 +86,7 @@ class EditRequest(BaseModel):
     action: Literal["rewrite", "shorten", "expand"] = "rewrite"
     source: Literal["rag", "web"] | None = None
     kb_name: str | None = None
+    model: str | None = None
 
 
 class EditResponse(BaseModel):
@@ -94,6 +96,7 @@ class EditResponse(BaseModel):
 
 class AutoMarkRequest(BaseModel):
     text: str
+    model: str | None = None
 
 
 class AutoMarkResponse(BaseModel):
@@ -105,15 +108,18 @@ class AutoMarkResponse(BaseModel):
 async def edit_text(request: EditRequest):
     try:
         # Get agent with refreshed LLM configuration from Settings
-        agent = get_edit_agent()
+        with use_model_context(
+            ModelContext(request_id=None, request_model=request.model, source="rest_co_writer_edit")
+        ):
+            agent = get_edit_agent()
 
-        result = await agent.process(
-            text=request.text,
-            instruction=request.instruction,
-            action=request.action,
-            source=request.source,
-            kb_name=request.kb_name,
-        )
+            result = await agent.process(
+                text=request.text,
+                instruction=request.instruction,
+                action=request.action,
+                source=request.source,
+                kb_name=request.kb_name,
+            )
 
         # Print token stats
         print_stats()
@@ -130,9 +136,12 @@ async def auto_mark_text(request: AutoMarkRequest):
     """AI auto-mark text"""
     try:
         # Get agent with refreshed LLM configuration from Settings
-        agent = get_edit_agent()
+        with use_model_context(
+            ModelContext(request_id=None, request_model=request.model, source="rest_co_writer_automark")
+        ):
+            agent = get_edit_agent()
 
-        result = await agent.auto_mark(text=request.text)
+            result = await agent.auto_mark(text=request.text)
 
         # Print token stats
         print_stats()
@@ -209,6 +218,7 @@ class NarrateRequest(BaseModel):
     style: Literal["friendly", "academic", "concise"] = "friendly"
     voice: str | None = None  # If None, will use default value from config
     skip_audio: bool = False
+    model: str | None = None
 
 
 class NarrateResponse(BaseModel):
@@ -231,6 +241,7 @@ class ScriptOnlyRequest(BaseModel):
 
     content: str
     style: Literal["friendly", "academic", "concise"] = "friendly"
+    model: str | None = None
 
 
 @router.post("/narrate", response_model=NarrateResponse)
@@ -246,14 +257,17 @@ async def narrate_content(request: NarrateRequest):
     - skip_audio: Whether to skip audio generation (set to true to return only script)
     """
     try:
-        narrator = get_narrator_agent()
-        result = await narrator.narrate(
-            content=request.content,
-            style=request.style,
-            voice=request.voice,
-            skip_audio=request.skip_audio,
-        )
-        return result
+        with use_model_context(
+            ModelContext(request_id=None, request_model=request.model, source="rest_co_writer_narrate")
+        ):
+            narrator = get_narrator_agent()
+            result = await narrator.narrate(
+                content=request.content,
+                style=request.style,
+                voice=request.voice,
+                skip_audio=request.skip_audio,
+            )
+            return result
     except ValueError as e:
         # TTS configuration related error
         raise HTTPException(status_code=400, detail=str(e))
@@ -270,9 +284,16 @@ async def generate_script_only(request: ScriptOnlyRequest):
     Fast endpoint, suitable for previewing script effect
     """
     try:
-        narrator = get_narrator_agent()
-        result = await narrator.generate_script(content=request.content, style=request.style)
-        return result
+        with use_model_context(
+            ModelContext(
+                request_id=None,
+                request_model=request.model,
+                source="rest_co_writer_script_only",
+            )
+        ):
+            narrator = get_narrator_agent()
+            result = await narrator.generate_script(content=request.content, style=request.style)
+            return result
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))

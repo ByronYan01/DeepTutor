@@ -19,6 +19,7 @@ from src.agents.chat import ChatAgent, SessionManager
 from src.logging import get_logger
 from src.services.config import load_config_with_main
 from src.services.llm.config import get_llm_config
+from src.services.llm.model_context import ModelContext, reset_model_context, set_model_context
 from src.services.settings.interface_settings import get_ui_language
 
 # Initialize logger
@@ -123,6 +124,13 @@ async def websocket_chat(websocket: WebSocket):
         while True:
             # Receive message
             data = await websocket.receive_json()
+            model_ctx_token = set_model_context(
+                ModelContext(
+                    request_id=data.get("session_id"),
+                    request_model=data.get("model"),
+                    source="ws_chat",
+                )
+            )
             # Use current UI language (fallback to config/main.yaml system.language)
             language = get_ui_language(default=config.get("system", {}).get("language", "en"))
             message = data.get("message", "").strip()
@@ -133,7 +141,13 @@ async def websocket_chat(websocket: WebSocket):
             enable_web_search = data.get("enable_web_search", False)
 
             if not message:
-                await websocket.send_json({"type": "error", "message": "Message is required"})
+                try:
+                    await websocket.send_json({"type": "error", "message": "Message is required"})
+                finally:
+                    try:
+                        reset_model_context(model_ctx_token)
+                    except Exception as e:
+                        logger.debug(f"Failed to reset model context for invalid chat message: {e}")
                 continue
 
             logger.info(
@@ -307,6 +321,11 @@ async def websocket_chat(websocket: WebSocket):
             except Exception as e:
                 logger.error(f"Chat processing error: {e}")
                 await websocket.send_json({"type": "error", "message": str(e)})
+            finally:
+                try:
+                    reset_model_context(model_ctx_token)
+                except Exception as e:
+                    logger.debug(f"Failed to reset model context in chat message loop: {e}")
 
     except WebSocketDisconnect:
         logger.debug("Client disconnected from chat")

@@ -46,6 +46,7 @@ from .exceptions import (
     LLMRateLimitError,
     LLMTimeoutError,
 )
+from .model_context import get_model_context
 from .utils import is_local_llm_server
 
 # Initialize logger
@@ -150,6 +151,12 @@ async def complete(
     Returns:
         str: The LLM response
     """
+    # Get request-level model from context when explicit model is not provided
+    if not model:
+        context = get_model_context()
+        if context and context.request_model:
+            model = context.request_model
+
     # Get config if parameters not provided
     if not model or not base_url:
         config = get_llm_config()
@@ -280,6 +287,12 @@ async def stream(
     Yields:
         str | dict: Response chunks or structured events
     """
+    # Get request-level model from context when explicit model is not provided
+    if not model:
+        context = get_model_context()
+        if context and context.request_model:
+            model = context.request_model
+
     # Get config if parameters not provided
     if not model or not base_url:
         config = get_llm_config()

@@ -533,7 +533,6 @@ class AgentCoordinator:
             response = await llm_complete(
                 prompt=user_prompt,
                 system_prompt=system_prompt,
-                model=llm_config.model,
                 api_key=self._api_key or llm_config.api_key,
                 base_url=self._base_url or llm_config.base_url,
                 api_version=self._api_version,

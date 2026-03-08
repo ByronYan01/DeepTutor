@@ -23,6 +23,7 @@ sys.path.insert(0, str(project_root))
 from src.logging import get_logger
 from src.services.config import load_config_with_main
 from src.services.llm.config import get_llm_config
+from src.services.llm.model_context import ModelContext, reset_model_context, set_model_context
 from src.services.settings.interface_settings import get_ui_language
 
 # Setup module logger with unified logging system (from config)
@@ -68,6 +69,7 @@ async def websocket_mimic_generate(websocket: WebSocket):
 
     pusher_task = None
     original_stdout = sys.stdout
+    model_ctx_token = None
 
     try:
         # 1. Wait for config
@@ -75,6 +77,11 @@ async def websocket_mimic_generate(websocket: WebSocket):
         mode = data.get("mode", "parsed")  # "upload" or "parsed"
         kb_name = data.get("kb_name", "ai_textbook")
         max_questions = data.get("max_questions")
+        request_model = data.get("model")
+
+        model_ctx_token = set_model_context(
+            ModelContext(request_id=None, request_model=request_model, source="ws_question_mimic")
+        )
 
         logger.info(f"Starting mimic generation (mode: {mode}, kb: {kb_name})")
 
@@ -300,6 +307,12 @@ async def websocket_mimic_generate(websocket: WebSocket):
         except Exception:
             pass
     finally:
+        if model_ctx_token is not None:
+            try:
+                reset_model_context(model_ctx_token)
+            except Exception as e:
+                logger.debug(f"Failed to reset model context in mimic: {e}")
+
         # Ensure stdout is always restored
         sys.stdout = original_stdout
 
@@ -331,6 +344,8 @@ async def websocket_mimic_generate(websocket: WebSocket):
 async def websocket_question_generate(websocket: WebSocket):
     await websocket.accept()
 
+    model_ctx_token = None
+
     # Get task ID manager
     task_manager = TaskIDManager.get_instance()
 
@@ -340,6 +355,11 @@ async def websocket_question_generate(websocket: WebSocket):
         requirement = data.get("requirement")
         kb_name = data.get("kb_name", "ai_textbook")
         count = data.get("count", 1)
+        request_model = data.get("model")
+
+        model_ctx_token = set_model_context(
+            ModelContext(request_id=None, request_model=request_model, source="ws_question_generate")
+        )
 
         if not requirement:
             try:
@@ -537,3 +557,9 @@ async def websocket_question_generate(websocket: WebSocket):
     except Exception as e:
         error_msg = format_exception_message(e)
         logger.error(f"WebSocket error: {error_msg}")
+    finally:
+        if model_ctx_token is not None:
+            try:
+                reset_model_context(model_ctx_token)
+            except Exception as e:
+                logger.debug(f"Failed to reset model context in question generate: {e}")

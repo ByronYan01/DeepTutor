@@ -15,6 +15,7 @@ from src.api.utils.task_id_manager import TaskIDManager
 from src.logging import get_logger
 from src.services.config import load_config_with_main
 from src.services.llm import get_llm_config
+from src.services.llm.model_context import ModelContext, reset_model_context, set_model_context
 from src.services.settings.interface_settings import get_ui_language
 
 # Force stdout to use utf-8 to prevent encoding errors with emojis on Windows
@@ -41,10 +42,14 @@ class OptimizeRequest(BaseModel):
     iteration: int = 0
     previous_result: dict[str, Any] | None = None
     kb_name: str | None = "ai_textbook"
+    model: str | None = None
 
 
 @router.post("/optimize_topic")
 async def optimize_topic(request: OptimizeRequest):
+    model_ctx_token = set_model_context(
+        ModelContext(request_id=None, request_model=request.model, source="rest_research_optimize")
+    )
     try:
         config = load_config()
         config.setdefault("system", {})
@@ -77,6 +82,11 @@ async def optimize_topic(request: OptimizeRequest):
     except Exception as e:
         traceback.print_exc()
         return {"error": str(e)}
+    finally:
+        try:
+            reset_model_context(model_ctx_token)
+        except Exception as e:
+            logger.debug(f"Failed to reset model context in optimize_topic: {e}")
 
 
 @router.websocket("/run")
@@ -89,6 +99,7 @@ async def websocket_research_run(websocket: WebSocket):
     pusher_task = None
     progress_pusher_task = None
     original_stdout = sys.stdout  # Save original stdout at the start
+    model_ctx_token = None
 
     try:
         # 1. Wait for config
@@ -102,6 +113,11 @@ async def websocket_research_run(websocket: WebSocket):
         # Legacy support
         preset = data.get("preset")  # For backward compatibility
         research_mode = data.get("research_mode")
+        request_model = data.get("model")
+
+        model_ctx_token = set_model_context(
+            ModelContext(request_id=None, request_model=request_model, source="ws_research_run")
+        )
 
         if not topic:
             await websocket.send_json({"type": "error", "content": "Topic is required"})
@@ -397,6 +413,12 @@ async def websocket_research_run(websocket: WebSocket):
         except Exception as log_err:
             logger.warning(f"Failed to log error: {log_err}")
     finally:
+        if model_ctx_token is not None:
+            try:
+                reset_model_context(model_ctx_token)
+            except Exception as e:
+                logger.debug(f"Failed to reset model context in websocket_research_run: {e}")
+
         if pusher_task:
             pusher_task.cancel()
         if progress_pusher_task:

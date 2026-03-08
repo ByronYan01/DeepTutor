@@ -29,6 +29,7 @@ from src.services.config import get_agent_params
 from src.services.llm import complete as llm_complete
 from src.services.llm import get_llm_config, get_token_limit_kwargs, supports_response_format
 from src.services.llm import stream as llm_stream
+from src.services.llm.model_context import get_model_context
 from src.services.prompt import get_prompt_manager
 
 
@@ -162,19 +163,24 @@ class BaseAgent(ABC):
         Raises:
             ValueError: If model is not configured
         """
-        # 1. Try agent-specific config
+        # 1. Try explicit request model from request-scoped context
+        context = get_model_context()
+        if context and context.request_model:
+            return context.request_model
+
+        # 2. Try agent-specific config
         if self.agent_config.get("model"):
             return self.agent_config["model"]
 
-        # 2. Try general LLM config
+        # 3. Try general LLM config
         if self.llm_config.get("model"):
             return self.llm_config["model"]
 
-        # 3. Use instance model
+        # 4. Use instance model
         if self.model:
             return self.model
 
-        # 4. Fallback to environment variable
+        # 5. Fallback to environment variable
         env_model = os.getenv("LLM_MODEL")
         if env_model:
             return env_model

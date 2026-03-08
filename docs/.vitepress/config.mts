@@ -79,7 +79,8 @@ export default defineConfig({
             {
               text: '资源',
               items: [
-                { text: '常见问题', link: '/zh/guide/troubleshooting' }
+                { text: '常见问题', link: '/zh/guide/troubleshooting' },
+                { text: '按请求模型改造分析', link: '/zh/guide/agent-model-per-request-analysis' }
               ]
             }
           ]

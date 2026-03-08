@@ -22,6 +22,7 @@ from src.api.utils.task_id_manager import TaskIDManager
 from src.logging import get_logger
 from src.services.config import load_config_with_main
 from src.services.llm import get_llm_config
+from src.services.llm.model_context import ModelContext, use_model_context
 from src.services.settings.interface_settings import get_ui_language
 
 router = APIRouter()
@@ -41,6 +42,7 @@ class CreateSessionRequest(BaseModel):
 
     notebook_id: str | None = None  # Optional, single notebook mode
     records: list[dict] | None = None  # Optional, cross-notebook mode with direct records
+    model: str | None = None
 
 
 class ChatRequest(BaseModel):
@@ -48,6 +50,7 @@ class ChatRequest(BaseModel):
 
     session_id: str
     message: str
+    model: str | None = None
 
 
 class FixHtmlRequest(BaseModel):
@@ -55,12 +58,14 @@ class FixHtmlRequest(BaseModel):
 
     session_id: str
     bug_description: str
+    model: str | None = None
 
 
 class NextKnowledgeRequest(BaseModel):
     """Next knowledge point request"""
 
     session_id: str
+    model: str | None = None
 
 
 # === Helper Functions ===
@@ -125,12 +130,19 @@ async def create_session(request: CreateSessionRequest):
         # Reset LLM stats for new session
         BaseAgent.reset_stats("guide")
 
-        manager = get_guide_manager()
-        result = await manager.create_session(
-            notebook_id=request.notebook_id or "cross_notebook",
-            notebook_name=notebook_name,
-            records=records,
-        )
+        with use_model_context(
+            ModelContext(
+                request_id=None,
+                request_model=request.model,
+                source="rest_guide_create_session",
+            )
+        ):
+            manager = get_guide_manager()
+            result = await manager.create_session(
+                notebook_id=request.notebook_id or "cross_notebook",
+                notebook_name=notebook_name,
+                records=records,
+            )
 
         if result and "session_id" in result:
             session_id = result["session_id"]
@@ -152,9 +164,16 @@ async def start_learning(request: NextKnowledgeRequest):
     Start learning (get the first knowledge point).
     """
     try:
-        manager = get_guide_manager()
-        result = await manager.start_learning(request.session_id)
-        return result
+        with use_model_context(
+            ModelContext(
+                request_id=request.session_id,
+                request_model=request.model,
+                source="rest_guide_start",
+            )
+        ):
+            manager = get_guide_manager()
+            result = await manager.start_learning(request.session_id)
+            return result
     except Exception as e:
         logger.error(f"Start learning failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -166,14 +185,21 @@ async def next_knowledge(request: NextKnowledgeRequest):
     Move to the next knowledge point.
     """
     try:
-        manager = get_guide_manager()
-        result = await manager.next_knowledge(request.session_id)
+        with use_model_context(
+            ModelContext(
+                request_id=request.session_id,
+                request_model=request.model,
+                source="rest_guide_next",
+            )
+        ):
+            manager = get_guide_manager()
+            result = await manager.next_knowledge(request.session_id)
 
-        # Print stats if learning completed
-        if result.get("learning_complete", False):
-            BaseAgent.print_stats("guide")
+            # Print stats if learning completed
+            if result.get("learning_complete", False):
+                BaseAgent.print_stats("guide")
 
-        return result
+            return result
     except Exception as e:
         logger.error(f"Next knowledge failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -185,9 +211,16 @@ async def chat(request: ChatRequest):
     Send a chat message.
     """
     try:
-        manager = get_guide_manager()
-        result = await manager.chat(request.session_id, request.message)
-        return result
+        with use_model_context(
+            ModelContext(
+                request_id=request.session_id,
+                request_model=request.model,
+                source="rest_guide_chat",
+            )
+        ):
+            manager = get_guide_manager()
+            result = await manager.chat(request.session_id, request.message)
+            return result
     except Exception as e:
         logger.error(f"Chat failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -199,9 +232,16 @@ async def fix_html(request: FixHtmlRequest):
     Fix HTML page bugs.
     """
     try:
-        manager = get_guide_manager()
-        result = await manager.fix_html(request.session_id, request.bug_description)
-        return result
+        with use_model_context(
+            ModelContext(
+                request_id=request.session_id,
+                request_model=request.model,
+                source="rest_guide_fix_html",
+            )
+        ):
+            manager = get_guide_manager()
+            result = await manager.fix_html(request.session_id, request.bug_description)
+            return result
     except Exception as e:
         logger.error(f"Fix HTML failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -286,37 +326,44 @@ async def websocket_guide(websocket: WebSocket, session_id: str):
                 data = await websocket.receive_json()
                 msg_type = data.get("type", "")
 
-                if msg_type == "start":
-                    logger.debug(f"[{task_id}] Start learning")
-                    result = await manager.start_learning(session_id)
-                    await websocket.send_json({"type": "start_result", "data": result})
-
-                elif msg_type == "next":
-                    logger.debug(f"[{task_id}] Next knowledge point")
-                    result = await manager.next_knowledge(session_id)
-                    await websocket.send_json({"type": "next_result", "data": result})
-
-                elif msg_type == "chat":
-                    message = data.get("message", "")
-                    if message:
-                        logger.debug(f"[{task_id}] User message: {message[:50]}...")
-                        result = await manager.chat(session_id, message)
-                        await websocket.send_json({"type": "chat_result", "data": result})
-
-                elif msg_type == "fix_html":
-                    bug_desc = data.get("bug_description", "")
-                    logger.debug(f"[{task_id}] Fix HTML: {bug_desc[:50]}...")
-                    result = await manager.fix_html(session_id, bug_desc)
-                    await websocket.send_json({"type": "fix_result", "data": result})
-
-                elif msg_type == "get_session":
-                    session = manager.get_session(session_id)
-                    await websocket.send_json({"type": "session_info", "data": session})
-
-                else:
-                    await websocket.send_json(
-                        {"type": "error", "content": f"Unknown message type: {msg_type}"}
+                with use_model_context(
+                    ModelContext(
+                        request_id=session_id,
+                        request_model=data.get("model"),
+                        source="ws_guide",
                     )
+                ):
+                    if msg_type == "start":
+                        logger.debug(f"[{task_id}] Start learning")
+                        result = await manager.start_learning(session_id)
+                        await websocket.send_json({"type": "start_result", "data": result})
+
+                    elif msg_type == "next":
+                        logger.debug(f"[{task_id}] Next knowledge point")
+                        result = await manager.next_knowledge(session_id)
+                        await websocket.send_json({"type": "next_result", "data": result})
+
+                    elif msg_type == "chat":
+                        message = data.get("message", "")
+                        if message:
+                            logger.debug(f"[{task_id}] User message: {message[:50]}...")
+                            result = await manager.chat(session_id, message)
+                            await websocket.send_json({"type": "chat_result", "data": result})
+
+                    elif msg_type == "fix_html":
+                        bug_desc = data.get("bug_description", "")
+                        logger.debug(f"[{task_id}] Fix HTML: {bug_desc[:50]}...")
+                        result = await manager.fix_html(session_id, bug_desc)
+                        await websocket.send_json({"type": "fix_result", "data": result})
+
+                    elif msg_type == "get_session":
+                        session = manager.get_session(session_id)
+                        await websocket.send_json({"type": "session_info", "data": session})
+
+                    else:
+                        await websocket.send_json(
+                            {"type": "error", "content": f"Unknown message type: {msg_type}"}
+                        )
 
             except WebSocketDisconnect:
                 logger.debug(f"WebSocket disconnected: {session_id}")

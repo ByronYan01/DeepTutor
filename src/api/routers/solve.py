@@ -23,6 +23,7 @@ sys.path.insert(0, str(_project_root))
 from src.logging import get_logger
 from src.services.config import load_config_with_main
 from src.services.llm import get_llm_config
+from src.services.llm.model_context import ModelContext, reset_model_context, set_model_context
 from src.services.settings.interface_settings import get_ui_language
 
 # Initialize logger with config
@@ -102,6 +103,7 @@ async def websocket_solve(websocket: WebSocket):
     connection_closed = asyncio.Event()
     log_queue = asyncio.Queue()
     pusher_task = None
+    model_ctx_token = None
 
     async def safe_send_json(data: dict[str, Any]):
         """Safely send JSON to WebSocket, checking if connection is closed"""
@@ -150,6 +152,11 @@ async def websocket_solve(websocket: WebSocket):
         question = data.get("question")
         kb_name = data.get("kb_name", "ai_textbook")
         session_id = data.get("session_id")  # Optional session ID
+        request_model = data.get("model")
+
+        model_ctx_token = set_model_context(
+            ModelContext(request_id=session_id, request_model=request_model, source="ws_solve")
+        )
 
         if not question:
             await websocket.send_json({"type": "error", "content": "Question is required"})
@@ -395,6 +402,12 @@ async def websocket_solve(websocket: WebSocket):
         if "task_id" in locals():
             task_manager.update_task_status(task_id, "error", error=str(e))
     finally:
+        if model_ctx_token is not None:
+            try:
+                reset_model_context(model_ctx_token)
+            except Exception as e:
+                logger.debug(f"Error resetting model context: {e}")
+
         # Stop log pusher first
         connection_closed.set()
         if pusher_task:
