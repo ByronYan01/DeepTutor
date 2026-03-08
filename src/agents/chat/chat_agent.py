@@ -17,7 +17,7 @@ Uses the unified LLM factory from BaseAgent for both cloud and local LLM support
 
 from pathlib import Path
 import sys
-from typing import Any, AsyncGenerator
+from typing import Any, AsyncGenerator, Dict, Union
 
 # Add project root to path
 _project_root = Path(__file__).parent.parent.parent.parent
@@ -279,7 +279,7 @@ class ChatAgent(BaseAgent):
     async def generate_stream(
         self,
         messages: list[dict[str, str]],
-    ) -> AsyncGenerator[str, None]:
+    ) -> AsyncGenerator[Union[str, Dict[str, Any]], None]:
         """
         Generate streaming response from LLM.
 
@@ -290,7 +290,7 @@ class ChatAgent(BaseAgent):
             messages: Messages array for OpenAI API
 
         Yields:
-            Response chunks as strings
+            Response chunks as strings or structured events
         """
         # Extract system prompt from messages
         system_prompt = ""
@@ -353,6 +353,7 @@ class ChatAgent(BaseAgent):
             model=self.get_model(),
             api_key=self.api_key,
             base_url=self.base_url,
+            binding=self.binding,
             messages=messages,
             temperature=self.get_temperature(),
         )
@@ -418,6 +419,11 @@ class ChatAgent(BaseAgent):
                 full_response = ""
                 # 事件驱动，等待 LLM 生成响应，生成后通过 yield 返回
                 async for chunk in self.generate_stream(messages):
+                    if isinstance(chunk, dict):
+                        if chunk.get("type") == "thinking":
+                            yield chunk
+                        continue
+
                     full_response += chunk
                     yield {"type": "chunk", "content": chunk}
 

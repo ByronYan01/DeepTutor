@@ -14,6 +14,7 @@ export interface ChatSource {
 export interface HomeChatMessage {
   role: "user" | "assistant";
   content: string;
+  thinking?: string;
   sources?: ChatSource;
   isStreaming?: boolean;
 }

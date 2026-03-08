@@ -32,7 +32,7 @@ Retry Mechanism:
 """
 
 import asyncio
-from typing import Any, AsyncGenerator, Dict, List, Optional
+from typing import Any, AsyncGenerator, Dict, List, Optional, Union
 
 import tenacity
 
@@ -253,7 +253,7 @@ async def stream(
     retry_delay: float = DEFAULT_RETRY_DELAY,
     exponential_backoff: bool = DEFAULT_EXPONENTIAL_BACKOFF,
     **kwargs,
-) -> AsyncGenerator[str, None]:
+) -> AsyncGenerator[Union[str, Dict[str, Any]], None]:
     """
     Unified LLM streaming function with automatic retry.
 
@@ -278,7 +278,7 @@ async def stream(
         **kwargs: Additional parameters (temperature, max_tokens, etc.)
 
     Yields:
-        str: Response chunks
+        str | dict: Response chunks or structured events
     """
     # Get config if parameters not provided
     if not model or not base_url:

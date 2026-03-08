@@ -7,6 +7,7 @@ REST endpoints for session operations.
 """
 
 from pathlib import Path
+import os
 import sys
 
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
@@ -30,6 +31,9 @@ router = APIRouter()
 
 # Initialize session manager
 session_manager = SessionManager()
+
+# Debug switch: log thinking chunks as protocol events
+DEBUG_LOG_THINKING = os.getenv("DEBUG_LOG_THINKING", "false").lower() in ("1", "true", "yes")
 
 
 # =============================================================================
@@ -108,6 +112,7 @@ async def websocket_chat(websocket: WebSocket):
     - {"type": "session", "session_id": str}           # Session ID (new or existing)
     - {"type": "status", "stage": str, "message": str} # Status updates
     - {"type": "stream", "content": str}               # Streaming response chunks
+    - {"type": "thinking", "content": str}             # Optional thinking chunks
     - {"type": "sources", "rag": list, "web": list}    # Source citations
     - {"type": "result", "content": str}               # Final complete response
     - {"type": "error", "message": str}                # Error message
@@ -256,6 +261,23 @@ async def websocket_chat(websocket: WebSocket):
                             }
                         )
                         full_response += chunk_data["content"]
+                    elif chunk_data["type"] == "thinking":
+                        thinking_content = chunk_data.get("content", "")
+                        if DEBUG_LOG_THINKING and thinking_content:
+                            preview = thinking_content[:200] + ("..." if len(thinking_content) > 200 else "")
+                            logger.info(
+                                "[thinking-event] session=%s len=%d preview=%s",
+                                session_id,
+                                len(thinking_content),
+                                preview,
+                            )
+                        # 新增协议：前端可选对接，不对接也不影响现有展示
+                        await websocket.send_json(
+                            {
+                                "type": "thinking",
+                                "content": thinking_content,
+                            }
+                        )
                     elif chunk_data["type"] == "complete":
                         full_response = chunk_data["response"]
                         sources = chunk_data.get("sources", {"rag": [], "web": []})

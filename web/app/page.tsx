@@ -13,8 +13,6 @@ import {
   Microscope,
   Lightbulb,
   Trash2,
-  ExternalLink,
-  BookOpen,
   Sparkles,
   Edit3,
   GraduationCap,
@@ -22,15 +20,10 @@ import {
   Save,
 } from "lucide-react";
 import Link from "next/link";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import remarkMath from "remark-math";
-import rehypeKatex from "rehype-katex";
-import "katex/dist/katex.min.css";
 import { useGlobal } from "@/context/GlobalContext";
 import { apiUrl } from "@/lib/api";
-import { processLatexContent } from "@/lib/latex";
 import AddToNotebookModal from "@/components/AddToNotebookModal";
+import { AssistantMessageContent } from "@/components/chat";
 import { useTranslation } from "react-i18next";
 
 interface KnowledgeBase {
@@ -115,13 +108,16 @@ export default function HomePage() {
   useEffect(() => {
     if (messagesContainerRef.current) {
       const container = messagesContainerRef.current;
-      // Use scrollTop instead of scrollIntoView to prevent page-level scrolling
+      // Streaming mode updates too frequently for smooth scrolling
+      const scrollBehavior: ScrollBehavior = chatState.isLoading
+        ? "auto"
+        : "smooth";
       container.scrollTo({
         top: container.scrollHeight,
-        behavior: "smooth",
+        behavior: scrollBehavior,
       });
     }
-  }, [chatState.messages]);
+  }, [chatState.messages, chatState.isLoading]);
 
   const handleSend = () => {
     if (!inputMessage.trim() || chatState.isLoading) return;
@@ -404,10 +400,7 @@ export default function HomePage() {
             className="flex-1 overflow-y-auto px-6 py-6 space-y-6"
           >
             {chatState.messages.map((msg, idx) => (
-              <div
-                key={idx}
-                className="flex gap-4 w-full max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-2"
-              >
+              <div key={idx} className="flex gap-4 w-full max-w-4xl mx-auto">
                 {msg.role === "user" ? (
                   <>
                     <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center shrink-0">
@@ -422,59 +415,7 @@ export default function HomePage() {
                     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shrink-0 shadow-lg shadow-blue-500/30">
                       <Bot className="w-4 h-4 text-white" />
                     </div>
-                    <div className="flex-1 space-y-3">
-                      <div className="bg-white dark:bg-slate-800 px-5 py-4 rounded-2xl rounded-tl-none border border-slate-200 dark:border-slate-700 shadow-sm">
-                        <div className="prose prose-slate dark:prose-invert prose-sm max-w-none">
-                          <ReactMarkdown
-                            remarkPlugins={[remarkGfm, remarkMath]}
-                            rehypePlugins={[rehypeKatex]}
-                          >
-                            {processLatexContent(msg.content)}
-                          </ReactMarkdown>
-                        </div>
-
-                        {/* Loading indicator */}
-                        {msg.isStreaming && (
-                          <div className="flex items-center gap-2 mt-3 text-blue-600 dark:text-blue-400 text-sm">
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            <span>{t("Generating response...")}</span>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Sources */}
-                      {msg.sources &&
-                        (msg.sources.rag?.length ?? 0) +
-                          (msg.sources.web?.length ?? 0) >
-                          0 && (
-                          <div className="flex flex-wrap gap-2">
-                            {msg.sources.rag?.map((source, i) => (
-                              <div
-                                key={`rag-${i}`}
-                                className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg text-xs"
-                              >
-                                <BookOpen className="w-3 h-3" />
-                                <span>{source.kb_name}</span>
-                              </div>
-                            ))}
-                            {msg.sources.web?.slice(0, 3).map((source, i) => (
-                              <a
-                                key={`web-${i}`}
-                                href={source.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 rounded-lg text-xs hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors"
-                              >
-                                <Globe className="w-3 h-3" />
-                                <span className="max-w-[150px] truncate">
-                                  {source.title || source.url}
-                                </span>
-                                <ExternalLink className="w-3 h-3" />
-                              </a>
-                            ))}
-                          </div>
-                        )}
-                    </div>
+                    <AssistantMessageContent message={msg} />
                   </>
                 )}
               </div>

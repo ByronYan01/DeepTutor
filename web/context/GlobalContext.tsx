@@ -232,6 +232,7 @@ interface ChatSource {
 interface HomeChatMessage {
   role: "user" | "assistant";
   content: string;
+  thinking?: string;
   sources?: ChatSource;
   isStreaming?: boolean;
 }
@@ -1972,6 +1973,26 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
           }
           return { ...prev, messages, currentStage: "generating" };
         });
+      } else if (data.type === "thinking") {
+        const thinkingChunk = data.content || "";
+        setChatState((prev) => {
+          const messages = [...prev.messages];
+          const lastMessage = messages[messages.length - 1];
+          if (lastMessage?.role === "assistant" && lastMessage?.isStreaming) {
+            messages[messages.length - 1] = {
+              ...lastMessage,
+              thinking: (lastMessage.thinking || "") + thinkingChunk,
+            };
+          } else {
+            messages.push({
+              role: "assistant",
+              content: "",
+              thinking: thinkingChunk,
+              isStreaming: true,
+            });
+          }
+          return { ...prev, messages, currentStage: "generating" };
+        });
       } else if (data.type === "sources") {
         setChatState((prev) => {
           const messages = [...prev.messages];
@@ -2083,6 +2104,7 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
       const messages: HomeChatMessage[] = session.messages.map((msg: any) => ({
         role: msg.role,
         content: msg.content,
+        thinking: msg.thinking,
         sources: msg.sources,
         isStreaming: false,
       }));

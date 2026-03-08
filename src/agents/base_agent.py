@@ -16,7 +16,7 @@ import os
 from pathlib import Path
 import sys
 import time
-from typing import Any, AsyncGenerator
+from typing import Any, AsyncGenerator, Dict, Union
 
 # Add project root to path
 _project_root = Path(__file__).parent.parent.parent
@@ -466,7 +466,7 @@ class BaseAgent(ABC):
         max_tokens: int | None = None,
         model: str | None = None,
         stage: str | None = None,
-    ) -> AsyncGenerator[str, None]:
+    ) -> AsyncGenerator[Union[str, Dict[str, Any]], None]:
         """
         Unified interface for streaming LLM responses.
 
@@ -483,7 +483,7 @@ class BaseAgent(ABC):
             stage: Stage marker for logging
 
         Yields:
-            Response chunks as strings
+            Response chunks as strings or structured events
         """
         model = model or self.get_model()
         temperature = temperature if temperature is not None else self.get_temperature()
@@ -522,9 +522,15 @@ class BaseAgent(ABC):
                 api_key=self.api_key,
                 base_url=self.base_url,
                 api_version=self.api_version,
+                binding=self.binding,
                 messages=messages,
                 **kwargs,
             ):
+                if isinstance(chunk, dict):
+                    if chunk.get("type") == "thinking":
+                        yield chunk
+                    continue
+
                 full_response += chunk
                 yield chunk
 

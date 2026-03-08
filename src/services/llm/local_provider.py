@@ -13,7 +13,7 @@ Key features:
 """
 
 import json
-from typing import AsyncGenerator, Dict, List, Optional
+from typing import Any, AsyncGenerator, Dict, List, Optional
 
 import aiohttp
 
@@ -27,7 +27,57 @@ from .utils import (
 )
 
 # Extended timeout for local servers (may be slower than cloud)
+import logging
+import os
+
 DEFAULT_TIMEOUT = 300  # 5 minutes
+
+# Debug switch: log hidden thinking blocks to backend logs (方案C)
+_local_logger = logging.getLogger("local_llm")
+DEBUG_LOG_THINKING = os.getenv("DEBUG_LOG_THINKING", "false").lower() in ("1", "true", "yes")
+
+
+def _extract_thinking_text(content: str) -> str:
+    """Extract thinking block text without tags for debug logging."""
+    if not content or "<think>" not in content:
+        return ""
+
+    start = content.find("<think>")
+    end = content.find("</think>", start + len("<think>"))
+    if start == -1:
+        return ""
+    if end != -1:
+        return content[start + len("<think>") : end].strip()
+    return content[start + len("<think>") :].strip()
+
+
+def _extract_reasoning_delta(delta: Dict[str, Any]) -> str:
+    """Extract reasoning text from OpenAI-compatible streaming delta."""
+    if not delta:
+        return ""
+
+    reasoning = (
+        delta.get("reasoning_content")
+        or delta.get("reasoning")
+        or delta.get("thought")
+        or ""
+    )
+
+    if isinstance(reasoning, str):
+        return reasoning
+
+    if isinstance(reasoning, list):
+        parts: list[str] = []
+        for item in reasoning:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict):
+                text = item.get("text") or item.get("content") or ""
+                if isinstance(text, str):
+                    parts.append(text)
+        return "".join(parts)
+
+    return ""
 
 
 async def complete(
@@ -106,6 +156,16 @@ async def complete(
                 msg = result["choices"][0].get("message", {})
                 # Use unified response extraction
                 content = extract_response_content(msg)
+                if DEBUG_LOG_THINKING:
+                    thinking_text = _extract_thinking_text(content)
+                    if thinking_text:
+                        preview = thinking_text[:500] + ("..." if len(thinking_text) > 500 else "")
+                        _local_logger.info(
+                            "[thinking-debug] non-stream model=%s len=%d preview=%s",
+                            model,
+                            len(thinking_text),
+                            preview,
+                        )
                 # Clean thinking tags using unified utility
                 content = clean_thinking_tags(content)
                 return content
@@ -121,7 +181,7 @@ async def stream(
     base_url: Optional[str] = None,
     messages: Optional[List[Dict[str, str]]] = None,
     **kwargs,
-) -> AsyncGenerator[str, None]:
+) -> AsyncGenerator[Any, None]:
     """
     Stream a response from local LLM server.
 
@@ -138,7 +198,7 @@ async def stream(
         **kwargs: Additional parameters (temperature, max_tokens, etc.)
 
     Yields:
-        str: Response chunks
+        str | dict: Response chunks or structured events
     """
     if not base_url:
         raise LLMConfigError("base_url is required for local LLM provider")
@@ -205,6 +265,12 @@ async def stream(
                             chunk_data = json.loads(data_str)
                             if "choices" in chunk_data and chunk_data["choices"]:
                                 delta = chunk_data["choices"][0].get("delta", {})
+
+                                # DeepSeek/Qwen reasoning field compatibility
+                                reasoning_content = _extract_reasoning_delta(delta)
+                                if reasoning_content:
+                                    yield {"type": "thinking", "content": reasoning_content}
+
                                 content = delta.get("content")
 
                                 if content:
@@ -216,6 +282,18 @@ async def stream(
                                     elif in_thinking_block:
                                         thinking_buffer += content
                                         if "</think>" in thinking_buffer:
+                                            if DEBUG_LOG_THINKING:
+                                                thinking_text = _extract_thinking_text(thinking_buffer)
+                                                if thinking_text:
+                                                    preview = thinking_text[:500] + (
+                                                        "..." if len(thinking_text) > 500 else ""
+                                                    )
+                                                    _local_logger.info(
+                                                        "[thinking-debug] stream model=%s len=%d preview=%s",
+                                                        model,
+                                                        len(thinking_text),
+                                                        preview,
+                                                    )
                                             # End of thinking block, clean and yield
                                             cleaned = clean_thinking_tags(thinking_buffer)
                                             if cleaned:
@@ -237,6 +315,11 @@ async def stream(
                             chunk_data = json.loads(line_str)
                             if "choices" in chunk_data and chunk_data["choices"]:
                                 delta = chunk_data["choices"][0].get("delta", {})
+
+                                reasoning_content = _extract_reasoning_delta(delta)
+                                if reasoning_content:
+                                    yield {"type": "thinking", "content": reasoning_content}
+
                                 content = delta.get("content")
                                 if content:
                                     yield content

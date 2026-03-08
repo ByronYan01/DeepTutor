@@ -10,21 +10,16 @@ import {
   Clock,
   Loader2,
   MessageSquare,
-  ExternalLink,
 } from "lucide-react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import remarkMath from "remark-math";
-import rehypeKatex from "rehype-katex";
-import "katex/dist/katex.min.css";
 import { apiUrl } from "@/lib/api";
-import { processLatexContent } from "@/lib/latex";
 import { useGlobal } from "@/context/GlobalContext";
+import { AssistantMessageContent } from "@/components/chat";
 import { useTranslation } from "react-i18next";
 
 interface ChatMessage {
   role: "user" | "assistant";
   content: string;
+  thinking?: string;
   timestamp?: number;
   sources?: {
     rag?: Array<{ kb_name: string; content: string }>;
@@ -201,56 +196,21 @@ export default function ChatSessionDetail({
                     </div>
                   )}
                   <div
-                    className={`max-w-[80%] rounded-2xl px-4 py-3 ${
+                    className={
                       msg.role === "user"
-                        ? "bg-blue-500 text-white rounded-br-none"
-                        : "bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-bl-none"
-                    }`}
+                        ? "max-w-[80%] rounded-2xl px-4 py-3 bg-blue-500 text-white rounded-br-none"
+                        : "max-w-[80%]"
+                    }
                   >
                     {msg.role === "user" ? (
                       <p className="whitespace-pre-wrap">{msg.content}</p>
                     ) : (
-                      <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-2 prose-headings:my-2">
-                        <ReactMarkdown
-                          remarkPlugins={[remarkGfm, remarkMath]}
-                          rehypePlugins={[rehypeKatex]}
-                        >
-                          {processLatexContent(msg.content)}
-                        </ReactMarkdown>
-                      </div>
+                      <AssistantMessageContent
+                        message={msg}
+                        className="max-w-none"
+                        showSources={true}
+                      />
                     )}
-
-                    {/* Sources */}
-                    {msg.sources &&
-                      (msg.sources.rag?.length || msg.sources.web?.length) && (
-                        <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-600">
-                          <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">
-                            {t("Sources")}:
-                          </p>
-                          <div className="flex flex-wrap gap-1">
-                            {msg.sources.rag?.map((src, i) => (
-                              <span
-                                key={`rag-${i}`}
-                                className="px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded"
-                              >
-                                📚 {src.kb_name}
-                              </span>
-                            ))}
-                            {msg.sources.web?.map((src, i) => (
-                              <a
-                                key={`web-${i}`}
-                                href={src.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="px-2 py-0.5 text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded hover:bg-purple-200 dark:hover:bg-purple-900/50 flex items-center gap-1"
-                              >
-                                🌐 {src.title || new URL(src.url).hostname}
-                                <ExternalLink className="w-2.5 h-2.5" />
-                              </a>
-                            ))}
-                          </div>
-                        </div>
-                      )}
 
                     {/* Timestamp */}
                     {msg.timestamp && (

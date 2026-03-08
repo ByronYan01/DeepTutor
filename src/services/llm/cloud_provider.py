@@ -9,7 +9,7 @@ Provides both complete() and stream() methods.
 
 import logging
 import os
-from typing import AsyncGenerator, Dict, List, Optional
+from typing import Any, AsyncGenerator, Dict, List, Optional
 
 import aiohttp
 
@@ -26,8 +26,54 @@ def _get_aiohttp_ssl_context():
 _lightrag_logger = logging.getLogger("lightrag")
 _openai_logger = logging.getLogger("openai")
 
+# Debug switch: log hidden thinking blocks to backend logs (方案C)
+DEBUG_LOG_THINKING = os.getenv("DEBUG_LOG_THINKING", "false").lower() in ("1", "true", "yes")
+
 # Lazy import for lightrag to avoid import errors when not installed
 _openai_complete_if_cache = None
+
+
+def _extract_thinking_text(content: str) -> str:
+    """Extract thinking block text without tags for debug logging."""
+    if not content or "<think>" not in content:
+        return ""
+
+    start = content.find("<think>")
+    end = content.find("</think>", start + len("<think>"))
+    if start == -1:
+        return ""
+    if end != -1:
+        return content[start + len("<think>") : end].strip()
+    return content[start + len("<think>") :].strip()
+
+
+def _extract_reasoning_delta(delta: Dict[str, Any]) -> str:
+    """Extract reasoning text from OpenAI-compatible streaming delta."""
+    if not delta:
+        return ""
+
+    reasoning = (
+        delta.get("reasoning_content")
+        or delta.get("reasoning")
+        or delta.get("thought")
+        or ""
+    )
+
+    if isinstance(reasoning, str):
+        return reasoning
+
+    if isinstance(reasoning, list):
+        parts: list[str] = []
+        for item in reasoning:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict):
+                text = item.get("text") or item.get("content") or ""
+                if isinstance(text, str):
+                    parts.append(text)
+        return "".join(parts)
+
+    return ""
 
 
 def _get_openai_complete_if_cache():
@@ -115,7 +161,7 @@ async def stream(
     binding: str = "openai",
     messages: Optional[List[Dict[str, str]]] = None,
     **kwargs,
-) -> AsyncGenerator[str, None]:
+) -> AsyncGenerator[Any, None]:
     """
     Stream a response from cloud API providers.
 
@@ -131,7 +177,7 @@ async def stream(
         **kwargs: Additional parameters (temperature, max_tokens, etc.)
 
     Yields:
-        str: Response chunks
+        str | dict: Response chunks or structured events
     """
     binding_lower = (binding or "openai").lower()
 
@@ -257,6 +303,17 @@ async def _openai_complete(
                     )
 
     if content is not None:
+        if DEBUG_LOG_THINKING:
+            thinking_text = _extract_thinking_text(content)
+            if thinking_text:
+                preview = thinking_text[:500] + ("..." if len(thinking_text) > 500 else "")
+                _openai_logger.info(
+                    "[thinking-debug] non-stream model=%s binding=%s len=%d preview=%s",
+                    model,
+                    binding,
+                    len(thinking_text),
+                    preview,
+                )
         # Clean thinking tags from response using unified utility
         return clean_thinking_tags(content, binding, model)
 
@@ -273,7 +330,7 @@ async def _openai_stream(
     binding: str = "openai",
     messages: Optional[List[Dict[str, str]]] = None,
     **kwargs,
-) -> AsyncGenerator[str, None]:
+) -> AsyncGenerator[Any, None]:
     """OpenAI-compatible streaming."""
     import json
 
@@ -345,6 +402,12 @@ async def _openai_stream(
                     chunk_data = json.loads(data_str)
                     if "choices" in chunk_data and chunk_data["choices"]:
                         delta = chunk_data["choices"][0].get("delta", {})
+
+                        # DeepSeek/Qwen reasoning field compatibility
+                        reasoning_content = _extract_reasoning_delta(delta)
+                        if reasoning_content:
+                            yield {"type": "thinking", "content": reasoning_content}
+
                         content = delta.get("content")
                         if content:
                             # Handle thinking tags in streaming
@@ -355,6 +418,19 @@ async def _openai_stream(
                             elif in_thinking_block:
                                 thinking_buffer += content
                                 if "</think>" in thinking_buffer:
+                                    if DEBUG_LOG_THINKING:
+                                        thinking_text = _extract_thinking_text(thinking_buffer)
+                                        if thinking_text:
+                                            preview = thinking_text[:500] + (
+                                                "..." if len(thinking_text) > 500 else ""
+                                            )
+                                            _openai_logger.info(
+                                                "[thinking-debug] stream model=%s binding=%s len=%d preview=%s",
+                                                model,
+                                                binding,
+                                                len(thinking_text),
+                                                preview,
+                                            )
                                     # End of thinking block, clean and yield
                                     cleaned = clean_thinking_tags(thinking_buffer, binding, model)
                                     if cleaned:
