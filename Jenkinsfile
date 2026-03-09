@@ -9,8 +9,9 @@ pipeline {
     }
     stages {
         stage('Build & Push Docker Image') {
+            // PLATFORM_DOCKER = 'linux/arm64,linux/amd64' 暂时去掉arm
             environment {
-                PLATFORM_DOCKER = 'linux/arm64,linux/amd64'
+                PLATFORM_DOCKER = 'linux/amd64'
                 DOCKERFILE      = 'Dockerfile'
                 REGISTRY        = 'harbor.xzinfra.com/xz-deeptutor'
                 REPOSITORY      = 'deeptutor'
