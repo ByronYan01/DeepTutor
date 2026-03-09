@@ -16,7 +16,7 @@
 # Stage 1: Frontend Builder
 # ============================================
 # FROM node:22-slim AS frontend-builder
-FROM harbor.xzinfra.com/base/node:20.8.1-bookworm AS frontend-builder
+FROM harbor.xzinfra.com/base/node:22-slim-bookworm AS frontend-builder
 
 WORKDIR /app/web
 
