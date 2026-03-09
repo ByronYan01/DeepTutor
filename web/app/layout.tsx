@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+// import { Inter } from "next/font/google";
 import "./globals.css";
 import Sidebar from "@/components/Sidebar";
 import { GlobalProvider } from "@/context/GlobalContext";
@@ -8,11 +8,11 @@ import LayoutWrapper from "@/components/LayoutWrapper";
 import { I18nClientBridge } from "@/i18n/I18nClientBridge";
 
 // Use Inter font with swap display for better loading
-const font = Inter({
-  subsets: ["latin"],
-  display: "swap",
-  fallback: ["system-ui", "sans-serif"],
-});
+// const font = Inter({
+//   subsets: ["latin"],
+//   display: "swap",
+//   fallback: ["system-ui", "sans-serif"],
+// });
 
 export const metadata: Metadata = {
   title: "DeepTutor Platform",
@@ -29,7 +29,8 @@ export default function RootLayout({
       <head>
         <ThemeScript />
       </head>
-      <body className={font.className}>
+      {/* <body className={font.className}> */}
+      <body className="font-sans">
         <GlobalProvider>
           <I18nClientBridge>
             <LayoutWrapper>
