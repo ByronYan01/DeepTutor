@@ -13,7 +13,7 @@ pipeline {
             environment {
                 PLATFORM_DOCKER = 'linux/amd64'
                 DOCKERFILE      = 'Dockerfile'
-                REGISTRY        = 'harbor.xzinfra.com/xz-deeptutor'
+                REGISTRY        = 'harbor.xzinfra.com/spiritx-app'
                 REPOSITORY      = 'deeptutor'
             }
             steps {
