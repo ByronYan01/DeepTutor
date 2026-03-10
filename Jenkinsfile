@@ -7,15 +7,18 @@ pipeline {
     triggers {
         gitlab(triggerOnPush: true, triggerOnMergeRequest: true, branchFilterType: 'All')
     }
+    // 关键修改1：将核心变量移到 pipeline 级别的 environment，让 post 阶段能访问
+    environment {
+        PLATFORM_DOCKER = 'linux/amd64'
+        DOCKERFILE      = 'Dockerfile'
+        REGISTRY        = 'harbor.xzinfra.com/spiritx-app'
+        REPOSITORY      = 'deeptutor'
+        // 初始化空变量，避免后续引用时报错
+        ARTIFACT_TAG    = ''
+        IS_RELEASE      = 'false'
+    }
     stages {
         stage('Build & Push Docker Image') {
-            // PLATFORM_DOCKER = 'linux/arm64,linux/amd64' 暂时去掉arm
-            environment {
-                PLATFORM_DOCKER = 'linux/amd64'
-                DOCKERFILE      = 'Dockerfile'
-                REGISTRY        = 'harbor.xzinfra.com/spiritx-app'
-                REPOSITORY      = 'deeptutor'
-            }
             steps {
                 checkout scm
                 script {
@@ -37,12 +40,12 @@ pipeline {
                     }
                 }
 
-                echo "构建镜像：${REGISTRY}/${REPOSITORY}:${ARTIFACT_TAG}"
+                echo "构建镜像：${env.REGISTRY}/${env.REPOSITORY}:${env.ARTIFACT_TAG}"
 
                 script {
                     // main/release 分支额外打 latest 标签
                     def extraTag = env.IS_RELEASE == 'true'
-                        ? "--tag ${REGISTRY}/${REPOSITORY}:latest"
+                        ? "--tag ${env.REGISTRY}/${env.REPOSITORY}:latest"
                         : ""
 
                     // Dockerfile 为完整多阶段构建（前端 Next.js + 后端 FastAPI），无需预处理
@@ -50,12 +53,12 @@ pipeline {
                     sh """
                         docker buildx build \\
                             --push \\
-                            --platform ${PLATFORM_DOCKER} \\
+                            --platform ${env.PLATFORM_DOCKER} \\
                             --provenance=false \\
                             --target production \\
                             --build-arg BACKEND_PORT=8001 \\
-                            -f ${DOCKERFILE} \\
-                            --tag ${REGISTRY}/${REPOSITORY}:${ARTIFACT_TAG} \\
+                            -f ${env.DOCKERFILE} \\
+                            --tag ${env.REGISTRY}/${env.REPOSITORY}:${env.ARTIFACT_TAG} \\
                             ${extraTag} \\
                             .
                     """
@@ -65,7 +68,8 @@ pipeline {
     }
     post {
         success {
-            echo "✅ 推送成功：${REGISTRY}/${REPOSITORY}:${ARTIFACT_TAG}"
+            // 关键修改2：统一使用 env.XXX 形式引用全局变量
+            echo "✅ 推送成功：${env.REGISTRY}/${env.REPOSITORY}:${env.ARTIFACT_TAG}"
         }
         failure {
             echo "❌ 构建失败，请查看日志"
