@@ -1,4 +1,4 @@
-# =============================================================================
+﻿# =============================================================================
 # Unified Agent Parameters Configuration
 # =============================================================================
 # This file serves as the SINGLE source of truth for temperature and max_tokens
@@ -20,8 +20,7 @@ solve:
 # Agents: rephrase_agent, decompose_agent, manager_agent, research_agent, note_agent, reporting_agent
 research:
   temperature: 0.5
-  max_tokens: 8192
-
+  max_tokens: 4096 # Increased for long-form report writing stages
 # Question Module - Question generation agents
 # Agents: question_generation_agent, question_validation_agent
 question:
@@ -57,3 +56,4 @@ co_writer:
 narrator:
   temperature: 0.7
   max_tokens: 4000
+

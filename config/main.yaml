@@ -94,6 +94,21 @@ research:
     min_section_length: 800
     enable_citation_list: true
     enable_inline_citations: false
+  token_budget:
+    default_reserved_output_tokens: 2048
+    default_safety_margin_tokens: 1024
+    char_per_token_fallback: 4.0
+
+    stages:
+      note_generate_summary:
+        reserved_output_tokens: 1200
+      reporting_write_section:
+        reserved_output_tokens: 1800
+      reporting_write_intro:
+        reserved_output_tokens: 1200
+      reporting_write_conclusion:
+        reserved_output_tokens: 1200
+
   rag:
     kb_name: DE-all
     default_mode: hybrid
