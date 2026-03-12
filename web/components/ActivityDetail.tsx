@@ -10,6 +10,7 @@ import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
 import { processLatexContent } from "@/lib/latex";
+import ReportMarkdown from "@/components/research/ReportMarkdown";
 
 // Hook to safely detect client-side rendering
 const emptySubscribe = () => () => {};
@@ -255,8 +256,8 @@ export default function ActivityDetail({
                 <h3 className="font-bold text-slate-900 dark:text-slate-100">
                   {t("Report Preview")}
                 </h3>
-                <div className="p-6 bg-white dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm max-h-96 overflow-y-auto font-mono text-xs text-slate-600 dark:text-slate-300">
-                  {activity.content.report}
+                <div className="p-6 bg-white dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm max-h-96 overflow-y-auto">
+                  <ReportMarkdown content={activity.content.report || ""} />
                 </div>
               </div>
             </>
