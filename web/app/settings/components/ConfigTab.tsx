@@ -136,7 +136,10 @@ export default function ConfigTab({
           </p>
         </div>
         <button
-          onClick={() => setShowAddForm(!showAddForm)}
+          onClick={() => {
+            setEditingConfig(null);
+            setShowAddForm((prev) => !prev);
+          }}
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
         >
           <Plus className="w-4 h-4" />
@@ -147,6 +150,7 @@ export default function ConfigTab({
       {/* Add/Edit Form */}
       {(showAddForm || editingConfig) && (
         <ConfigForm
+          key={editingConfig ? `edit-${editingConfig.id}` : "add-new"}
           configType={configType}
           showDimensions={showDimensions}
           showVoice={showVoice}

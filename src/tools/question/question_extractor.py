@@ -256,7 +256,16 @@ Please analyze the above exam paper content, extract all question information, a
             f"Raw response (first 500 chars): {result_text[:500]!r}"
         ) from e
 
-    questions = result.get("questions", [])
+    # 兼容 LLM 返回两种格式：
+    # 格式1（标准）: {"questions": [...]}
+    # 格式2（部分思考模型直接返回）: [{"question_number": ..., ...}, ...]
+    if isinstance(result, list):
+        questions = result
+    elif isinstance(result, dict):
+        questions = result.get("questions", [])
+    else:
+        print(f"⚠️ 意外的 LLM 返回类型: {type(result)}，视为空题目列表")
+        questions = []
     print(f"✓ Successfully extracted {len(questions)} questions")
 
     return questions

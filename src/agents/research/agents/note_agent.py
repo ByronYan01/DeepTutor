@@ -17,6 +17,7 @@ from src.agents.base_agent import BaseAgent
 from src.agents.research.data_structures import ToolTrace
 
 from ..utils.json_utils import extract_json_from_text
+from ..utils.prompt_budget import PromptBudgetManager
 
 
 class NoteAgent(BaseAgent):
@@ -39,6 +40,7 @@ class NoteAgent(BaseAgent):
             language=language,
             config=config,
         )
+        self._prompt_budget = PromptBudgetManager(config)
 
     async def process(
         self,
@@ -133,6 +135,17 @@ class NoteAgent(BaseAgent):
             raise ValueError(
                 "NoteAgent missing generate_summary prompt, please configure process.generate_summary in prompts/{lang}/note_agent.yaml"
             )
+
+        # 动态预算裁剪（按模型上下文窗口 + stage 预算）
+        budget_tokens = self._prompt_budget.get_budget(
+            stage="note_generate_summary", model=self.get_model()
+        )
+        raw_answer = self._prompt_budget.truncate_text_to_budget(
+            raw_answer,
+            budget_tokens=budget_tokens,
+            model=self.get_model(),
+            suffix="\n\n[内容因过长已按动态 token 预算截断，以上为保留内容...]",
+        )
 
         # Use string.Template to avoid conflicts with LaTeX braces like {\rho}
         # Convert {var} to $var format, then use safe_substitute

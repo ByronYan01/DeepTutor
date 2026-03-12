@@ -24,6 +24,7 @@ from src.agents.base_agent import BaseAgent
 from src.agents.research.data_structures import DynamicTopicQueue, TopicBlock
 
 from ..utils.json_utils import ensure_json_dict, ensure_keys, extract_json_from_text
+from ..utils.prompt_budget import PromptBudgetManager
 
 
 class ReportingAgent(BaseAgent):
@@ -77,7 +78,13 @@ class ReportingAgent(BaseAgent):
             config=config,
         )
         self.reporting_config = config.get("reporting", {})
+        self._prompt_budget = PromptBudgetManager(config)
         self.citation_manager = None  # Will be set during process
+        # Use a higher token budget for long-form report writing stages.
+        self.write_max_tokens = max(
+            self.get_max_tokens(),
+            int(self.reporting_config.get("write_max_tokens", 4096)),
+        )
 
         # Citation configuration: read from config, default off
         self.enable_citation_list = self.reporting_config.get("enable_citation_list", False)
@@ -298,20 +305,31 @@ class ReportingAgent(BaseAgent):
             "conclusion_instruction": "Summarize core findings, research contributions, limitations, and future directions",
         }
 
-    def _ser_block(self, b: TopicBlock) -> dict[str, Any]:
+    def _ser_block(self, b: TopicBlock, stage: str = "reporting_write_section") -> dict[str, Any]:
         """Serialize TopicBlock to dictionary, including complete tool traces
 
         If self._citation_map is available (built by _build_citation_number_map),
         each trace will include a ref_number field for inline citation use.
+
+        注意：raw_answer 按动态 token 预算裁剪，防止原始内容撑爆 LLM 上下文窗口。
+        报告写作阶段主要依赖 summary，raw_answer 仅作补充参考。
         """
+        budget_tokens = self._prompt_budget.get_budget(stage=stage, model=self.get_model())
+
         traces = []
         for t in b.tool_traces:
             cid = getattr(t, "citation_id", None) or f"CIT-{b.block_id.split('_')[-1]}-01"
+            raw = self._prompt_budget.truncate_text_to_budget(
+                t.raw_answer or "",
+                budget_tokens=budget_tokens,
+                model=self.get_model(),
+                suffix="...[按动态 token 预算截断]",
+            )
             trace_data = {
                 "citation_id": cid,
                 "tool_type": t.tool_type,
                 "query": t.query,
-                "raw_answer": t.raw_answer,  # Include complete original response
+                "raw_answer": raw,  # 已截断，防止 prompt 超长
                 "summary": t.summary,
             }
             # Add ref_number if citation map is available
@@ -415,17 +433,45 @@ class ReportingAgent(BaseAgent):
         resp = await self.call_llm(filled, system_prompt, stage="write_introduction", verbose=False)
         data = extract_json_from_text(resp)
 
+        return self._parse_text_field_or_fallback(
+            stage="write_introduction",
+            key="introduction",
+            data=data,
+            resp=resp,
+            default_value="（引言生成失败，已使用默认占位内容。）",
+        )
+
+    def _parse_text_field_or_fallback(
+        self,
+        stage: str,
+        key: str,
+        data: Any,
+        resp: str,
+        default_value: str,
+    ) -> str:
+        """Parse required text field from LLM JSON output, with non-fatal fallback."""
         try:
             obj = ensure_json_dict(data)
-            ensure_keys(obj, ["introduction"])
-            intro = obj.get("introduction", "")
-            if isinstance(intro, str) and intro.strip():
-                return intro
-            raise ValueError("LLM returned empty or invalid introduction field")
+            ensure_keys(obj, [key])
+            content = obj.get(key, "")
+            if isinstance(content, str) and content.strip():
+                return content
+            raise ValueError(f"LLM returned empty or invalid {key} field")
         except Exception as e:
-            raise ValueError(
-                f"Unable to parse LLM returned introduction content: {e!s}. Report generation failed."
+            fallback_content = (resp or "").strip()
+            if isinstance(data, dict) and len(data) == 1:
+                only_value = next(iter(data.values()))
+                if isinstance(only_value, str) and only_value.strip():
+                    fallback_content = only_value.strip()
+            if not fallback_content:
+                fallback_content = default_value
+
+            keys_info = list(data.keys()) if isinstance(data, dict) else type(data).__name__
+            self.logger.warning(
+                f"{stage} fallback used due to parse failure: "
+                f"error={e!s}; keys={keys_info}; raw_response={resp}"
             )
+            return fallback_content
 
     async def _write_section_body(
         self, topic: str, block: TopicBlock, section_outline: dict[str, Any]
@@ -442,7 +488,7 @@ class ReportingAgent(BaseAgent):
 
         import json as _json
 
-        block_data = self._ser_block(block)
+        block_data = self._ser_block(block, stage="reporting_write_section")
 
         # Dynamically build citation instructions based on configuration
         if self.enable_inline_citations:
@@ -475,20 +521,80 @@ class ReportingAgent(BaseAgent):
             citation_output_hint=citation_output_hint,
         )
 
-        resp = await self.call_llm(filled, system_prompt, stage="write_section_body", verbose=False)
+        resp = await self.call_llm(
+            filled,
+            system_prompt,
+            stage="write_section_body",
+            verbose=False,
+            max_tokens=self.write_max_tokens,
+        )
         data = extract_json_from_text(resp)
 
-        try:
-            obj = ensure_json_dict(data)
-            ensure_keys(obj, ["section_content"])
-            content = obj.get("section_content", "")
-            if isinstance(content, str) and content.strip():
-                return content
-            raise ValueError("LLM returned empty or invalid section_content field")
-        except Exception as e:
-            raise ValueError(
-                f"Unable to parse LLM returned section content: {e!s}. Report generation failed."
-            )
+        section_title = section_outline.get("title", block.sub_topic)
+        if not str(section_title).startswith("##"):
+            section_title = f"## {section_title}"
+
+        return self._parse_text_field_or_fallback(
+            stage="write_section_body",
+            key="section_content",
+            data=data,
+            resp=resp,
+            default_value=(
+                f"{section_title}\n\n"
+                "（本章节生成失败，已使用默认占位内容。）"
+            ),
+        )
+
+    async def _write_subsection(
+        self,
+        topic: str,
+        parent_section_title: str,
+        subsection: dict[str, Any],
+        block: TopicBlock,
+    ) -> str:
+        """Write a single subsection to reduce one-shot long-output truncation risk."""
+        import json as _json
+
+        system_prompt = self.get_prompt(
+            "system",
+            "role",
+            "You are an academic writing expert specializing in writing subsection content for research reports.",
+        )
+        tmpl = self.get_prompt("process", "write_subsection", "")
+        if not tmpl:
+            raise ValueError("Cannot get subsection writing prompt template, report generation failed")
+
+        block_data = self._ser_block(block, stage="reporting_write_section")
+        subsection_data_json = _json.dumps(block_data, ensure_ascii=False, indent=2)
+
+        filled = self._safe_format(
+            tmpl,
+            topic=topic,
+            parent_section_title=parent_section_title,
+            subsection_title=subsection.get("title", "### Subsection"),
+            subsection_instruction=subsection.get("instruction", ""),
+            subsection_data=subsection_data_json,
+        )
+
+        resp = await self.call_llm(
+            filled,
+            system_prompt,
+            stage="write_subsection",
+            verbose=False,
+            max_tokens=self.write_max_tokens,
+        )
+        data = extract_json_from_text(resp)
+
+        return self._parse_text_field_or_fallback(
+            stage="write_subsection",
+            key="subsection_content",
+            data=data,
+            resp=resp,
+            default_value=(
+                f"{subsection.get('title', '### Subsection')}\n\n"
+                "（本小节生成失败，已使用默认占位内容。）"
+            ),
+        )
 
     async def _write_conclusion(
         self, topic: str, blocks: list[TopicBlock], outline: dict[str, Any]
@@ -534,20 +640,22 @@ class ReportingAgent(BaseAgent):
             total_topics=len(blocks),
         )
 
-        resp = await self.call_llm(filled, system_prompt, stage="write_conclusion", verbose=False)
+        resp = await self.call_llm(
+            filled,
+            system_prompt,
+            stage="write_conclusion",
+            verbose=False,
+            max_tokens=self.write_max_tokens,
+        )
         data = extract_json_from_text(resp)
 
-        try:
-            obj = ensure_json_dict(data)
-            ensure_keys(obj, ["conclusion"])
-            conclusion = obj.get("conclusion", "")
-            if isinstance(conclusion, str) and conclusion.strip():
-                return conclusion
-            raise ValueError("LLM returned empty or invalid conclusion field")
-        except Exception as e:
-            raise ValueError(
-                f"Unable to parse LLM returned conclusion content: {e!s}. Report generation failed."
-            )
+        return self._parse_text_field_or_fallback(
+            stage="write_conclusion",
+            key="conclusion",
+            data=data,
+            resp=resp,
+            default_value="（结论生成失败，建议根据前文手动补充。）",
+        )
 
     def _build_citation_number_map(self, blocks: list[TopicBlock]) -> dict[str, int]:
         """Build citation_id to reference number mapping with deduplication
@@ -1220,102 +1328,22 @@ class ReportingAgent(BaseAgent):
         section: dict[str, Any],
         subsections: list[dict[str, Any]],
     ) -> str:
-        """Write a section that has explicitly defined subsections in the outline
+        """Write section by generating each subsection separately.
 
-        This method writes the section as a whole, passing subsection structure to the LLM
-        to guide the content organization while maintaining coherence.
+        This reduces input/output pressure of one-shot generation and lowers truncation risk.
         """
-        import json as _json
+        section_title = section.get("title", block.sub_topic)
+        if not section_title.startswith("##"):
+            section_title = f"## {section_title}"
 
-        # Enhance section instruction with subsection information
-        subsection_info = []
-        for j, sub in enumerate(subsections, 1):
-            subsection_info.append(
-                {
-                    "title": sub.get("title", f"### Subsection {j}"),
-                    "instruction": sub.get("instruction", ""),
-                }
-            )
+        parts: list[str] = [section_title, "\n\n"]
 
-        # Create enhanced section data with subsection guidance
-        enhanced_section = {
-            "title": section.get("title", block.sub_topic),
-            "instruction": section.get("instruction", ""),
-            "subsection_structure": subsection_info,
-        }
+        for sub in subsections:
+            subsection_text = await self._write_subsection(topic, section_title, sub, block)
+            parts.append(subsection_text.strip())
+            parts.append("\n\n")
 
-        # Prepare block data with subsection hints
-        block_data = self._ser_block(block)
-        block_data["expected_subsections"] = subsection_info
-
-        system_prompt = self.get_prompt(
-            "system",
-            "role",
-            "You are an academic writing expert specializing in writing comprehensive research report sections with structured subsections.",
-        )
-        tmpl = self.get_prompt("process", "write_section_body", "")
-        if not tmpl:
-            raise ValueError("Cannot get section writing prompt template, report generation failed")
-
-        # Build enhanced instruction including subsection structure
-        section_instruction = section.get("instruction", "")
-        if subsection_info:
-            subsection_guide = "\n\n**Expected subsection structure:**\n"
-            for sub in subsection_info:
-                subsection_guide += f"- {sub['title']}: {sub['instruction']}\n"
-            section_instruction += subsection_guide
-
-        # Dynamically build citation instructions based on configuration
-        if self.enable_inline_citations:
-            # Build clear citation reference table for this block
-            citation_table = self._build_citation_table(block)
-
-            citation_instruction_template = self.get_prompt("citation", "enabled_instruction")
-            if citation_instruction_template:
-                citation_instruction = citation_instruction_template.format(
-                    citation_table=citation_table
-                )
-            else:
-                # Fallback if YAML not configured
-                citation_instruction = f"**Citation Reference Table**:\n{citation_table}"
-            citation_output_hint = ", citations"
-        else:
-            citation_instruction = self.get_prompt("citation", "disabled_instruction") or ""
-            citation_output_hint = ""
-
-        # Use safe_format to avoid conflicts with LaTeX braces like {\rho}, {L}
-        block_data_json = _json.dumps(block_data, ensure_ascii=False, indent=2)
-        filled = self._safe_format(
-            tmpl,
-            topic=topic,
-            section_title=section.get("title", block.sub_topic),
-            section_instruction=section_instruction,
-            block_data=block_data_json,
-            min_section_length=self.reporting_config.get("min_section_length", 800),
-            citation_instruction=citation_instruction,
-            citation_output_hint=citation_output_hint,
-        )
-
-        # TODO Implement retry logic for LLM calls when JSON parsing or post-processing fails (e.g., malformed output, schema violations).
-        resp = await self.call_llm(
-            filled,
-            system_prompt,
-            stage="write_section_with_subsections",
-            verbose=False,
-        )
-        data = extract_json_from_text(resp)
-
-        try:
-            obj = ensure_json_dict(data)
-            ensure_keys(obj, ["section_content"])
-            content = obj.get("section_content", "")
-            if isinstance(content, str) and content.strip():
-                return content
-            raise ValueError("LLM returned empty or invalid section_content field")
-        except Exception as e:
-            raise ValueError(
-                f"Unable to parse LLM returned section content: {e!s}. Report generation failed."
-            )
+        return "".join(parts).strip()
 
     def _notify_progress(
         self, callback: Callable[[dict[str, Any]], None] | None, status: str, **payload: Any

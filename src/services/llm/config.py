@@ -68,6 +68,7 @@ class LLMConfig:
     api_version: Optional[str] = None
     max_tokens: int = 4096
     temperature: float = 0.7
+    context_window_tokens: Optional[int] = None
 
 
 def _strip_value(value: Optional[str]) -> Optional[str]:
@@ -130,6 +131,7 @@ def get_llm_config() -> LLMConfig:
                 api_key=config.get("api_key", ""),
                 base_url=config.get("base_url"),
                 api_version=config.get("api_version"),
+                context_window_tokens=config.get("context_window_tokens"),
             )
     except ImportError:
         # Unified config service not yet available, fall back to env
@@ -163,6 +165,7 @@ async def get_llm_config_async() -> LLMConfig:
                 api_key=config.get("api_key", ""),
                 base_url=config.get("base_url"),
                 api_version=config.get("api_version"),
+                context_window_tokens=config.get("context_window_tokens"),
             )
     except ImportError:
         pass

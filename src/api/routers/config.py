@@ -44,6 +44,9 @@ class LLMConfigCreate(ConfigBase):
     api_key: str | Dict[str, str] = Field(..., description="API key or {'use_env': 'VAR_NAME'}")
     model: str = Field(..., description="Model name")
     api_version: Optional[str] = None
+    context_window_tokens: int = Field(
+        ..., gt=0, description="Model context window size in tokens"
+    )
 
 
 class EmbeddingConfigCreate(ConfigBase):
@@ -88,6 +91,7 @@ class ConfigUpdate(BaseModel):
     dimensions: Optional[int] = None
     voice: Optional[str] = None
     api_version: Optional[str] = None
+    context_window_tokens: Optional[int] = Field(default=None, gt=0)
 
 
 class SetActiveRequest(BaseModel):
@@ -219,6 +223,9 @@ async def update_llm_config(config_id: str, updates: ConfigUpdate):
     """Update an LLM configuration."""
     if config_id == "default":
         raise HTTPException(status_code=400, detail="Cannot update default configuration")
+
+    if updates.context_window_tokens is None:
+        raise HTTPException(status_code=400, detail="context_window_tokens is required for LLM")
 
     manager = get_config_manager()
     result = manager.update_config(ConfigType.LLM, config_id, updates.model_dump(exclude_none=True))

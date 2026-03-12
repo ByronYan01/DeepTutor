@@ -118,6 +118,8 @@
   "Base URL is required for testing": "Base URL is required for testing",
   "API Key is required for cloud providers": "API Key is required for cloud providers",
   "Model name is required": "Model name is required",
+  "Context Window Tokens": "Context Window Tokens",
+  "Context window tokens is required": "Context window tokens is required",
   "Dimensions is required for embedding models": "Dimensions is required for embedding models",
   "Connection successful": "Connection successful",
   "Connection failed": "Connection failed",

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Plus,
   Check,
@@ -85,10 +85,38 @@ export default function ConfigForm({
     useState<boolean>(initialUseEnvApiKey);
   const [showApiKey, setShowApiKey] = useState(false);
   const [model, setModel] = useState(editConfig?.model || "");
+  const [contextWindowTokens, setContextWindowTokens] = useState(
+    editConfig?.context_window_tokens || 32768,
+  );
   const [dimensions, setDimensions] = useState(editConfig?.dimensions || 3072);
   const [voice, setVoice] = useState(editConfig?.voice || "alloy");
 
   const isLocalProvider = LOCAL_PROVIDERS.includes(provider);
+
+  // Keep form state in sync when switching between add/edit modes
+  // or editing different configurations without unmounting the form.
+  useEffect(() => {
+    const nextUseEnvBaseUrl = editConfig
+      ? isEnvReference(editConfig.base_url)
+      : false;
+    const nextUseEnvApiKey = editConfig
+      ? isEnvReference(editConfig.api_key)
+      : false;
+
+    setName(editConfig?.name || "");
+    setProvider(editConfig?.provider || PROVIDER_OPTIONS[configType][0]);
+    setBaseUrl(editConfig ? getDisplayValue(editConfig.base_url) : "");
+    setUseEnvBaseUrl(nextUseEnvBaseUrl);
+    setApiKey("");
+    setUseEnvApiKey(nextUseEnvApiKey);
+    setShowApiKey(false);
+    setModel(editConfig?.model || "");
+    setContextWindowTokens(editConfig?.context_window_tokens || 32768);
+    setDimensions(editConfig?.dimensions || 3072);
+    setVoice(editConfig?.voice || "alloy");
+    setError(null);
+    setTestResult(null);
+  }, [editConfig, configType]);
 
   const handleProviderChange = (newProvider: string) => {
     setProvider(newProvider);
@@ -122,6 +150,13 @@ export default function ConfigForm({
     }
     if (!model) {
       setTestResult({ success: false, message: t("Model name is required") });
+      return;
+    }
+    if (!contextWindowTokens || contextWindowTokens <= 0) {
+      setTestResult({
+        success: false,
+        message: t("Context window tokens is required"),
+      });
       return;
     }
     if (configType === "embedding" && !dimensions) {
@@ -194,6 +229,9 @@ export default function ConfigForm({
           ? { use_env: getEnvVarForBaseUrl(configType) }
           : baseUrl;
         payload.model = model;
+        if (configType === "llm") {
+          payload.context_window_tokens = Number(contextWindowTokens);
+        }
       }
 
       if (showDimensions) {
@@ -427,6 +465,29 @@ export default function ConfigForm({
               onChange={(e) => setModel(e.target.value)}
               required
               placeholder={t("gpt-4o")}
+              className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+        )}
+
+        {/* Context Window Tokens (LLM only) */}
+        {configType === "llm" && (
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+              {t("Context Window Tokens")}
+            </label>
+            <input
+              type="number"
+              min={1}
+              step={1}
+              value={
+                Number.isNaN(contextWindowTokens) ? "" : contextWindowTokens
+              }
+              onChange={(e) =>
+                setContextWindowTokens(parseInt(e.target.value, 10))
+              }
+              required
+              placeholder="32768"
               className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>

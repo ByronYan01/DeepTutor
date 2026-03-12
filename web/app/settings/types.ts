@@ -7,6 +7,7 @@ export interface ConfigItem {
   base_url?: string;
   api_key?: string;
   model?: string;
+  context_window_tokens?: number;
   dimensions?: number;
   voice?: string;
   api_version?: string;

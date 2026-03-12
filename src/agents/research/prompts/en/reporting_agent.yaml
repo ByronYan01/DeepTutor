@@ -171,6 +171,8 @@ process:
     **Output Format Requirements (Strictly Follow):**
     - Only output JSON object, do not use ```json code block wrapper
     - Special characters in JSON strings (such as quotes, newlines) must be properly escaped
+    - The key name MUST be exactly `"introduction"`; do not use `"int"`, `"intro"`, or any other key
+    - The returned object MUST contain `introduction` and its value MUST be a non-empty string
 
     Output Example:
     {{

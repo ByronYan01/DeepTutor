@@ -61,6 +61,7 @@ ENV_VAR_MAPPINGS = {
         "api_key": "LLM_API_KEY",
         "model": "LLM_MODEL",
         "api_version": "LLM_API_VERSION",
+        "context_window_tokens": "LLM_CONTEXT_WINDOW_TOKENS",
     },
     ConfigType.EMBEDDING: {
         "provider": "EMBEDDING_BINDING",
@@ -104,6 +105,17 @@ def _get_env_value(env_var: str) -> Optional[str]:
     if value:
         return value.strip().strip("\"'")
     return None
+
+
+def _get_env_int(env_var: str) -> Optional[int]:
+    """Get an integer env var value if present and valid."""
+    value = _get_env_value(env_var)
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        return None
 
 
 class UnifiedConfigManager:
@@ -178,6 +190,9 @@ class UnifiedConfigManager:
             if config_type == ConfigType.LLM:
                 default_config["model"] = _get_env_value(env_mapping.get("model")) or ""
                 default_config["provider"] = _get_env_value(env_mapping.get("provider")) or "openai"
+                default_config["context_window_tokens"] = {
+                    "use_env": "LLM_CONTEXT_WINDOW_TOKENS"
+                }
             elif config_type == ConfigType.EMBEDDING:
                 default_config["model"] = _get_env_value(env_mapping.get("model")) or ""
                 default_config["provider"] = _get_env_value(env_mapping.get("provider")) or "openai"
@@ -217,6 +232,7 @@ class UnifiedConfigManager:
                 "base_url": {"use_env": "LLM_HOST"},
                 "api_key": {"use_env": "LLM_API_KEY"},
                 "api_version": {"use_env": "LLM_API_VERSION"},
+                "context_window_tokens": {"use_env": "LLM_CONTEXT_WINDOW_TOKENS"},
             }
 
         elif config_type == ConfigType.EMBEDDING:
@@ -291,6 +307,7 @@ class UnifiedConfigManager:
                 "api_key": "***",  # Hidden for security
                 "model": _get_env_value(env_mapping.get("model")) or "",
                 "api_version": _get_env_value(env_mapping.get("api_version")),
+                "context_window_tokens": _get_env_int(env_mapping.get("context_window_tokens", "")),
             }
 
         elif config_type == ConfigType.EMBEDDING:
@@ -344,6 +361,7 @@ class UnifiedConfigManager:
                 "api_key": _get_env_value(env_mapping.get("api_key")) or "",
                 "model": _get_env_value(env_mapping.get("model")) or "",
                 "api_version": _get_env_value(env_mapping.get("api_version")),
+                "context_window_tokens": _get_env_int(env_mapping.get("context_window_tokens", "")),
             }
 
         elif config_type == ConfigType.EMBEDDING:
