@@ -275,6 +275,13 @@ async def _openai_complete(
             "temperature": get_effective_temperature(
                 binding, model, kwargs.get("temperature", 0.7)
             ),
+            "top_p": kwargs.get("top_p", 0.8),
+            "presence_penalty": kwargs.get("presence_penalty", 1.5),
+            # ── extra_body 里的字段，这里直接平铺 ──
+            "top_k": kwargs.get("top_k", 20),
+            "chat_template_kwargs": {
+                "enable_thinking": kwargs.get("enable_thinking", False)
+            },
         }
 
         # Handle max_tokens / max_completion_tokens based on model
@@ -363,6 +370,13 @@ async def _openai_stream(
         "messages": msg_list,
         "temperature": get_effective_temperature(binding, model, kwargs.get("temperature", 0.7)),
         "stream": True,
+        "top_p": kwargs.get("top_p", 0.8),
+        "presence_penalty": kwargs.get("presence_penalty", 1.5),
+        # ── extra_body 里的字段，这里直接平铺 ──
+        "top_k": kwargs.get("top_k", 20),
+        "chat_template_kwargs": {
+            "enable_thinking": kwargs.get("enable_thinking", False)
+        },
     }
 
     # Handle max_tokens / max_completion_tokens based on model
