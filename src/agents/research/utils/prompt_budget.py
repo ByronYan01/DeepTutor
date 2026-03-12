@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import logging
+import os
 from typing import Any
 
 from .token_tracker import count_tokens_with_tiktoken
@@ -32,6 +33,7 @@ class PromptBudgetManager:
 
     DEFAULTS = PromptBudgetConfig()
     MIN_INPUT_BUDGET_TOKENS = 128
+    DEFAULT_CONTEXT_WINDOW_TOKENS = 32768
 
     def __init__(self, config: dict[str, Any] | None = None):
         research_cfg = (config or {}).get("research", {})
@@ -110,14 +112,7 @@ class PromptBudgetManager:
             if isinstance(stage_cfg, dict):
                 resolved = self._apply_override(resolved, stage_cfg)
 
-        # LLM config (data/user/settings/llm_configs.json active config) can define
-        # model-level context window and should take precedence when model matches.
-        llm_context_window = self._get_active_llm_context_window(model)
-        if not llm_context_window:
-            raise ValueError(
-                "Missing required LLM context_window_tokens in active LLM configuration. "
-                "Please set it in Settings -> LLM."
-            )
+        llm_context_window, context_source = self._resolve_llm_context_window(model)
 
         resolved = PromptBudgetConfig(
             context_window_tokens=llm_context_window,
@@ -125,24 +120,88 @@ class PromptBudgetManager:
             safety_margin_tokens=resolved.safety_margin_tokens,
             char_per_token_fallback=resolved.char_per_token_fallback,
         )
-        return resolved, "active_llm"
+        return resolved, context_source
+
+    @classmethod
+    def _resolve_llm_context_window(cls, model: str | None = None) -> tuple[int, str]:
+        """
+        Resolve context window tokens with this priority:
+        1) request model match in llm configs
+        2) active llm config
+        3) LLM_CONTEXT_WINDOW_TOKENS env var
+        4) safe default
+        """
+        if model:
+            by_model = cls._get_llm_context_window_by_model(model)
+            if by_model and by_model > 0:
+                return by_model, "request_model"
+            logger.warning(
+                "prompt_budget: model '%s' not found (or missing context_window_tokens), fallback to active config",
+                model,
+            )
+
+        active_ctx = cls._get_active_llm_context_window()
+        if active_ctx and active_ctx > 0:
+            return active_ctx, "active_llm"
+
+        env_val = os.getenv("LLM_CONTEXT_WINDOW_TOKENS", "").strip()
+        if env_val:
+            try:
+                parsed = int(env_val)
+                if parsed > 0:
+                    logger.warning(
+                        "prompt_budget: fallback to env LLM_CONTEXT_WINDOW_TOKENS=%d",
+                        parsed,
+                    )
+                    return parsed, "env"
+            except ValueError:
+                logger.warning(
+                    "prompt_budget: invalid env LLM_CONTEXT_WINDOW_TOKENS='%s', ignoring",
+                    env_val,
+                )
+
+        logger.warning(
+            "prompt_budget: fallback to default context_window_tokens=%d",
+            cls.DEFAULT_CONTEXT_WINDOW_TOKENS,
+        )
+        return cls.DEFAULT_CONTEXT_WINDOW_TOKENS, "default"
 
     @staticmethod
-    def _get_active_llm_context_window(model: str | None = None) -> int | None:
+    def _get_llm_context_window_by_model(model: str) -> int | None:
+        """Match requested model from llm configs and return context_window_tokens."""
+        if not model:
+            return None
+        try:
+            from src.services.config import ConfigType, get_config_manager
+
+            manager = get_config_manager()
+            configs = manager.list_configs(ConfigType.LLM) or []
+            target = model.strip().lower()
+            for cfg in configs:
+                cfg_model = str(cfg.get("model") or "").strip().lower()
+                if not cfg_model or cfg_model != target:
+                    continue
+                value = cfg.get("context_window_tokens")
+                if value is None:
+                    continue
+                parsed = int(value)
+                if parsed > 0:
+                    return parsed
+        except Exception as e:
+            logger.debug(f"Failed to read context window by model '{model}': {e}")
+        return None
+
+    @staticmethod
+    def _get_active_llm_context_window() -> int | None:
         """
         Read context window from active LLM configuration.
 
-        Applies only when:
-        - active config has a valid positive context_window_tokens
-        - model is not provided, or matches active config model (case-insensitive)
+        Applies only when active config has a valid positive context_window_tokens.
         """
         try:
             from src.services.config import get_active_llm_config
 
             active = get_active_llm_config() or {}
-            configured_model = (active.get("model") or "").strip()
-            if model and configured_model and configured_model.lower() != model.lower():
-                return None
 
             value = active.get("context_window_tokens")
             if value is None:

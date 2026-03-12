@@ -58,6 +58,9 @@ export default function ResearchPage() {
   // Config State
   const [selectedKb, setSelectedKb] = useState<string>("");
   const [kbs, setKbs] = useState<string[]>([]);
+  const [models, setModels] = useState<string[]>([]);
+  const [selectedModel, setSelectedModel] = useState<string>("");
+  const [modelsLoading, setModelsLoading] = useState<boolean>(false);
   const [planMode, setPlanMode] = useState<string>("medium");
   const [enabledTools, setEnabledTools] = useState<string[]>(["RAG"]);
   const [enableOptimization, setEnableOptimization] = useState<boolean>(true);
@@ -96,6 +99,48 @@ export default function ResearchPage() {
       })
       .catch((err) => console.error("Failed to fetch KBs:", err));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- Only run on mount
+  }, []);
+
+  // Initialize LLM model options (refresh on each page entry)
+  useEffect(() => {
+    let isMounted = true;
+    setModelsLoading(true);
+    fetch(apiUrl("/api/v1/config/llm"))
+      .then((res) => res.json())
+      .then((data) => {
+        if (!isMounted) return;
+        const configs = Array.isArray(data?.configs) ? data.configs : [];
+        const uniqueModels = Array.from(
+          new Set(
+            configs
+              .map((cfg: any) => cfg?.model)
+              .filter((m: unknown): m is string => typeof m === "string" && !!m.trim()),
+          ),
+        );
+        setModels(uniqueModels);
+
+        const activeModel =
+          configs.find((cfg: any) => cfg?.is_active && typeof cfg?.model === "string")?.model ||
+          uniqueModels[0] ||
+          "";
+        setSelectedModel((prev) =>
+          prev && uniqueModels.includes(prev) ? prev : activeModel,
+        );
+      })
+      .catch((err) => {
+        console.error("Failed to fetch LLM configs:", err);
+        if (isMounted) {
+          setModels([]);
+          setSelectedModel("");
+        }
+      })
+      .finally(() => {
+        if (isMounted) setModelsLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   // Auto-scroll Chat
@@ -146,6 +191,7 @@ export default function ResearchPage() {
         JSON.stringify({
           topic,
           kb_name: selectedKb,
+          model: selectedModel || undefined,
           plan_mode: planMode,
           enabled_tools: enabledTools,
           skip_rephrase: !enableOptimization, // If we already optimized, skip internal rephrase
@@ -248,6 +294,7 @@ export default function ResearchPage() {
           topic: userMsg.content,
           iteration: 0,
           kb_name: selectedKb,
+          model: selectedModel || undefined,
         }),
       });
       const data = await res.json();
@@ -384,6 +431,28 @@ export default function ResearchPage() {
                   </button>
                 ))}
               </div>
+            </div>
+
+            {/* Model Selection */}
+            <div>
+              <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1 block">
+                {t("Model")}
+              </label>
+              <select
+                value={selectedModel}
+                onChange={(e) => setSelectedModel(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-sm text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-emerald-500/20"
+              >
+                {modelsLoading && <option value="">{t("Loading...")}</option>}
+                {!modelsLoading && models.length === 0 && (
+                  <option value="">{t("No model configured")}</option>
+                )}
+                {models.map((model) => (
+                  <option key={model} value={model}>
+                    {model}
+                  </option>
+                ))}
+              </select>
             </div>
 
             {/* Tools */}
@@ -779,7 +848,11 @@ export default function ResearchPage() {
         title={state.planning.originalTopic || "Research Report"}
         userQuery={state.planning.originalTopic || ""}
         output={state.reporting.generatedReport || ""}
-        metadata={{ plan_mode: planMode, enabled_tools: enabledTools }}
+        metadata={{
+          plan_mode: planMode,
+          enabled_tools: enabledTools,
+          model: selectedModel,
+        }}
         kbName={selectedKb}
       />
     </div>
