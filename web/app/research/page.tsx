@@ -110,13 +110,13 @@ export default function ResearchPage() {
       .then((data) => {
         if (!isMounted) return;
         const configs = Array.isArray(data?.configs) ? data.configs : [];
-        const uniqueModels = Array.from(
-          new Set(
-            configs
-              .map((cfg: any) => cfg?.model)
-              .filter((m: unknown): m is string => typeof m === "string" && !!m.trim()),
-          ),
-        );
+        const modelNames: string[] = configs
+          .map((cfg: any) => cfg?.model)
+          .filter(
+            (m: unknown): m is string =>
+              typeof m === "string" && m.trim().length > 0,
+          );
+        const uniqueModels: string[] = Array.from(new Set(modelNames));
         setModels(uniqueModels);
 
         const activeModel =
